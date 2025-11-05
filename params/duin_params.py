@@ -1120,8 +1120,9 @@ class duin_align_params(duin_params):   # 新增align模型参数
 
         self.model.align = DotDict()
         ## -- Normal parameters
-        # The dimensions of feature embedding.
-        self.model.align.d_feature = self.model.encoder.d_model
+        # The dimensions of feature embedding after flattening (emb_len * d_model).
+        #Here need to be rectify:d_feature = emb_len*d_model
+        self.model.align.d_feature = self.model.encoder.emb_len * self.model.encoder.d_model
         self.model.align.d_output = 768
         self.model.align.d_hidden = [1024,512]
         self.model.align.dropout = 0.1        

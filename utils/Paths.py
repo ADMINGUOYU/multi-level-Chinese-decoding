@@ -79,8 +79,11 @@ class Paths:
         self.run.logger = DotDict({
             "summaries": self._init_run_logger(self.run.base, "summaries"),
         })
-        # Copy scripts.
-        self._init_run_script()
+        
+        # Copy scripts.  
+        ###################################### 这里可以控制是否保存整个script
+        # self._init_run_script()
+
         # Save params.
         self._init_run_params()
 

@@ -143,7 +143,7 @@ class ContrastiveBlock(nn.Module):
             loss_matrix = torch.exp(torch.matmul(emb_z, torch.permute(emb_y, dims=[1,0])) / self.tau)
             # Calculate `loss_z` & `loss_y` from `loss_matrix`, which is `z`x`y`.
             # loss_[z,y] - (batch_size,), loss - torch.float32
-            labels = torch.eye(loss_matrix.shape[0], dtype=loss_matrix.dtype)
+            labels = torch.eye(loss_matrix.shape[0], dtype=loss_matrix.dtype, device=loss_matrix.device)
             loss_z = torch.squeeze(torch.subtract(
                 torch.log(torch.sum(loss_matrix, dim=0, keepdim=True)),
                 torch.log(torch.sum(torch.multiply(loss_matrix, labels), dim=0, keepdim=True))
@@ -159,7 +159,7 @@ class ContrastiveBlock(nn.Module):
             loss_matrix = torch.matmul(emb_z, torch.permute(emb_y, dims=[1,0])) * torch.exp(self.t)
             # Calculate `loss_z` & `loss_y` from `loss_matrix`, which is `z`x`y`.
             # loss_[z,y] - (batch_size,), loss - torch.float32
-            labels = torch.eye(loss_matrix.shape[0], dtype=loss_matrix.dtype)
+            labels = torch.eye(loss_matrix.shape[0], dtype=loss_matrix.dtype, device=loss_matrix.device)
             loss_z = utils.model.torch.cross_entropy(logits=loss_matrix, target=labels, dim=-1)
             loss_y = utils.model.torch.cross_entropy(logits=loss_matrix, target=labels, dim=0)
             loss = (torch.mean(loss_z) + torch.mean(loss_y)) / 2

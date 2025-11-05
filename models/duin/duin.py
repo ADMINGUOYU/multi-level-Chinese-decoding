@@ -760,15 +760,16 @@ class duin_cls(nn.Module):
 # def duin_align class
 class duin_align(nn.Module):   # 新增的alignment任务模型
     """
-    DuIN model for classification task.
+    DuIN model for alignment task.
+    Projects brain embeddings to external embedding spaces (e.g., CLIP embeddings).
     """
 
     def __init__(self, params, **kwargs):   # 不变
         """
-        Initialize `duin_cls` object.
+        Initialize `duin_align` object.
 
         Args:
-            params: DotDict - Model parameters initialized by duin_cls_params, updated by params.iteration.
+            params: DotDict - Model parameters initialized by duin_align_params, updated by params.iteration.
             kwargs: dict - The arguments related to initialize `nn.Module`-style object.
 
         Returns:
@@ -929,23 +930,22 @@ class duin_align(nn.Module):   # 新增的alignment任务模型
         Args:
             value:  (batch_size, d_output) - Predicted embedding from the model.
             target: (batch_size, d_output) - Ground-truth or teacher embedding.
-        
+
         Returns:
             loss: torch.float32 - Mean squared error between L2-normalized embeddings.
         """
+        # ---- Step 1. Validate shapes ----
+        assert value.shape == target.shape, f"Shape mismatch: {value.shape} vs {target.shape}"
 
         # ---- Step 2. Compute MSE loss ----
         # MSE on normalized embeddings is equivalent to minimizing cosine distance
         # value_np = value.detach().cpu().numpy()
-        # target_np = target.detach().cpu().numpy()     
+        # target_np = target.detach().cpu().numpy()
         # res = [value_origin, value_np, target_np]
         # np.save('emb_res_1.npy', res)
         # print("Saved normalized embeddings to 'emb_res.npy'.")
         # exit()
         loss = 1000 * F.mse_loss(value, target, reduction="mean")
-        
-
-        assert value.shape == target.shape, f"Shape mismatch: {value.shape} vs {target.shape}"
 
         return loss
 
