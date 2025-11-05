@@ -36,7 +36,7 @@ GT_visual_path = '/mnt/afs/250010218/multi-level-Chinese-decoding/Duin_emb\
 /GT_embeddings/61words/Duin_vit_embeddings_vit_whole.npz'
 
 #savedir 是 path 去掉output_embeddings/
-savedir = path[38:]
+savedir = path[45:]
 print(savedir)
 exit()
 if test_type == 'Semantic':
