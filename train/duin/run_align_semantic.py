@@ -43,12 +43,13 @@ model = None; optimizer = None
 init funcs
 """
 # def init func
-def init(params_):   # 不变
+def init(params_, run_script_path=None):   # 不变
     """
     Initialize `duin_cls` training variables.
 
     Args:
         params_: DotDict - The parameters of current training process.
+        run_script_path: str - Optional path to the shell script used to launch training.
 
     Returns:
         None
@@ -71,6 +72,27 @@ def init(params_):   # 不变
     paths.run.ckpt = os.path.join(paths.run.train, "ckpt")
     os.makedirs(paths.run.ckpt, exist_ok=True)
     print(f"[INFO] Checkpoint directory created at: {paths.run.ckpt}")
+
+    # --- Add save_embeddings folder ---
+    paths.run.save_embeddings = os.path.join(paths.run.train, "save_embeddings")
+    os.makedirs(paths.run.save_embeddings, exist_ok=True)
+    print(f"[INFO] Embeddings directory created at: {paths.run.save_embeddings}")
+
+    # --- Save shell script if provided ---
+    if run_script_path is not None and os.path.isfile(run_script_path):
+        import shutil
+        script_name = os.path.basename(run_script_path)
+        script_dest = os.path.join(paths.run.script, script_name)
+        try:
+            shutil.copy2(run_script_path, script_dest)
+            msg = f"[INFO] Shell script saved to: {script_dest}"
+            print(msg); paths.run.logger.summaries.info(msg)
+        except Exception as e:
+            msg = f"[WARNING] Failed to save shell script: {e}"
+            print(msg); paths.run.logger.summaries.warning(msg)
+    elif run_script_path is not None:
+        msg = f"[WARNING] Shell script path provided but file not found: {run_script_path}"
+        print(msg); paths.run.logger.summaries.warning(msg)
 
 # def _init_model func
 def _init_model():   # 不变
@@ -148,7 +170,7 @@ def _load_data_seeg_he2023xuanwu(load_params):
     print("DEBUG params.model keys:", list(params.model.keys()))
 
     # --- Load supervision embeddings ---
-    emb_path = "/mnt/afs/250010218/multi-level-Chinese-decoding/GT_embeddings/Duin_Visual_GT_VitPerchar.npz"   # 新增加载监督 embedding 表
+    emb_path = "/mnt/afs/250010218/multi-level-Chinese-decoding/GT_embeddings/Duin_Semantic_GT_bert.npz"   # 新增加载监督 embedding 表
     emb_data = np.load(emb_path)
     emb_table = emb_data["emb_mean"] 
     emb_words = emb_data["words"]  # 或 "chars"，看 npz 内部字段名
@@ -849,7 +871,7 @@ def train():   # 修改训练循环中的损失函数、输出日志
                         all_embs.append(combined)
 
                 all_embs = np.concatenate(all_embs, axis=0)
-                save_path = os.path.join(paths.run.ckpt, f"test_embeddings_epoch_{epoch_idx+1:03d}.npy")
+                save_path = os.path.join(paths.run.save_embeddings, f"test_embeddings_epoch_{epoch_idx+1:03d}.npy")
                 np.save(save_path, all_embs)
                 print(f"[INFO] Saved test embeddings to {save_path}")
                 paths.run.logger.summaries.info(f"Saved test embeddings to {save_path}")
@@ -1035,12 +1057,47 @@ def get_args_parser():
         parser: object - The initialized argument parser.
     """
     # Initialize parser.
-    parser = argparse.ArgumentParser("DuIN CLS for brain signals", add_help=False)
-    # Add training parmaeters.
+    parser = argparse.ArgumentParser("DuIN Semantic Alignment for brain signals", add_help=False)
+
+    # Basic training parameters
     parser.add_argument("--seeds", type=int, nargs="+", default=[42,])
     parser.add_argument("--subjs", type=str, nargs="+", default=["011",])
     parser.add_argument("--subj_idxs", type=int, nargs="+", default=[0,])
     parser.add_argument("--pt_ckpt", type=str, default=None)
+
+    # Learning rate schedule
+    parser.add_argument("--lr_min", type=float, default=1e-5, help="Minimum learning rate (default: 1e-5)")
+    parser.add_argument("--lr_max", type=float, default=5e-4, help="Maximum learning rate (default: 5e-4)")
+
+    # Training schedule
+    parser.add_argument("--n_epochs", type=int, default=300, help="Number of training epochs (default: 300)")
+    parser.add_argument("--warmup_epochs", type=int, default=20, help="Number of warmup epochs (default: 20)")
+    parser.add_argument("--batch_size", type=int, default=32, help="Batch size (default: 32)")
+
+    # Loss scales
+    parser.add_argument("--contra_loss_scale", type=float, default=0.5, help="Contrastive loss scale (default: 0.5)")
+    parser.add_argument("--align_loss_scale", type=float, default=5.0, help="Alignment loss scale (default: 5.0)")
+
+    # Alignment head architecture
+    parser.add_argument("--d_hidden", type=str, default="1024,512", help="Hidden dimensions for alignment head, comma-separated (default: '1024,512')")
+    parser.add_argument("--align_dropout", type=float, default=0.1, help="Dropout rate for alignment head (default: 0.1)")
+    parser.add_argument("--d_output", type=int, default=768, help="Output dimension for alignment (default: 768)")
+
+    # Encoder dropout rates
+    parser.add_argument("--attn_dropout", type=float, default=0.2, help="Attention dropout rate (default: 0.2)")
+    parser.add_argument("--ff_dropout", type=str, default="0.2,0.0", help="Feedforward dropout rates, comma-separated (default: '0.2,0.0')")
+
+    # Contrastive learning parameters
+    parser.add_argument("--contra_d_hidden", type=int, default=32, help="Hidden dimension for contrastive layer (default: 32)")
+    parser.add_argument("--contra_loss_mode", type=str, default="clip_orig", choices=["clip", "clip_orig", "unicl"], help="Contrastive loss mode (default: 'clip_orig')")
+
+    # Encoder architecture
+    parser.add_argument("--n_blocks", type=int, default=8, help="Number of transformer blocks (default: 8)")
+    parser.add_argument("--n_heads", type=int, default=8, help="Number of attention heads (default: 8)")
+
+    # Shell script path for saving configuration
+    parser.add_argument("--run_script", type=str, default=None, help="Path to the shell script used to launch training (will be saved to summaries folder)")
+
     # Return the final `parser`.
     return parser
 
@@ -1062,8 +1119,38 @@ if __name__ == "__main__":
     duin_params_inst.train.base = base; duin_params_inst.train.subjs = args.subjs
     duin_params_inst.train.subj_idxs = args.subj_idxs; duin_params_inst.train.pt_ckpt = args.pt_ckpt
 
+    # Override parameters with command-line arguments
+    # Learning rate schedule
+    duin_params_inst.train.lr_factors = (args.lr_min, args.lr_max)
+
+    # Training schedule
+    duin_params_inst.train.n_epochs = args.n_epochs
+    duin_params_inst.train.warmup_epochs = args.warmup_epochs
+    duin_params_inst.train.batch_size = args.batch_size
+
+    # Loss scales
+    duin_params_inst.model.contra_loss_scale = args.contra_loss_scale
+    duin_params_inst.model.align_loss_scale = args.align_loss_scale
+
+    # Alignment head architecture
+    duin_params_inst.model.align.d_hidden = [int(x) for x in args.d_hidden.split(',')]
+    duin_params_inst.model.align.dropout = args.align_dropout
+    duin_params_inst.model.align.d_target = args.d_output
+
+    # Encoder dropout rates
+    duin_params_inst.model.encoder.attn_dropout = args.attn_dropout
+    duin_params_inst.model.encoder.ff_dropout = [float(x) for x in args.ff_dropout.split(',')]
+
+    # Contrastive learning parameters
+    duin_params_inst.model.contra.d_contra = args.contra_d_hidden
+    duin_params_inst.model.contra.loss_mode = args.contra_loss_mode
+
+    # Encoder architecture
+    duin_params_inst.model.encoder.n_blocks = args.n_blocks
+    duin_params_inst.model.encoder.n_heads = args.n_heads
+
     # Initialize the training process.
-    init(duin_params_inst)
+    init(duin_params_inst, run_script_path=args.run_script)
     # Loop the training process over random seeds.
     for seed_i in args.seeds:
         # Initialize random seed, then train duin.
