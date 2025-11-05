@@ -1,0 +1,18 @@
+{
+  "overall": {
+    "topk": {
+      "hits@1": 0.32499998807907104,
+      "hits@3": 0.37812501192092896,
+      "hits@5": 0.44062501192092896,
+      "hits@10": 0.5718749761581421
+    },
+    "MRR": 0.3954339252807003,
+    "accuracy": 0.325,
+    "ARI": 0.1451511283937624,
+    "NMI": 0.6537208900707945
+  },
+  "per_class_csv": "visual_eval_out//multi-level-Chinese-decoding/Duin_emb/output_embeddings/Visual_Doublelayer_(1024-512)-lr1e-4/test_embeddings_epoch_200.npy/per_class_report.csv",
+  "confusion_matrix_png": "visual_eval_out//multi-level-Chinese-decoding/Duin_emb/output_embeddings/Visual_Doublelayer_(1024-512)-lr1e-4/test_embeddings_epoch_200.npy/fig_confusion.png",
+  "projection_png": "visual_eval_out//multi-level-Chinese-decoding/Duin_emb/output_embeddings/Visual_Doublelayer_(1024-512)-lr1e-4/test_embeddings_epoch_200.npy/fig_projection.png",
+  "note": "Confusion matrix axes use class indices; map via GT_labels_semantic."
+}

@@ -880,37 +880,37 @@ def train():   # 修改训练循环中的损失函数、输出日志
 
     writer = paths.run.logger.tensorboard; writer.close()
 
-    # ====== 绘制并保存 loss 曲线 ======
-    epochs = range(len(train_total_losses))
+    # # ====== 绘制并保存 loss 曲线 ======
+    # epochs = range(len(train_total_losses))
 
-    # --- 图1：train vs validation ---
-    plt.figure(figsize=(8, 6))
-    plt.plot(epochs, train_total_losses, label='Train Loss', marker='o')
-    plt.plot(epochs, val_total_losses, label='Validation Loss', marker='s')
-    plt.title('Train vs Validation Total Loss')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    save_path_plot1 = os.path.join(paths.run.ckpt, "loss_train_val(Sem).png")
-    plt.savefig(save_path_plot1, dpi=300)
-    print(f"[INFO] Saved train/val loss plot to {save_path_plot1}")
-    plt.close()
+    # # --- 图1：train vs validation ---
+    # plt.figure(figsize=(8, 6))
+    # plt.plot(epochs, train_total_losses, label='Train Loss', marker='o')
+    # plt.plot(epochs, val_total_losses, label='Validation Loss', marker='s')
+    # plt.title('Train vs Validation Total Loss')
+    # plt.xlabel('Epoch')
+    # plt.ylabel('Loss')
+    # plt.legend()
+    # plt.grid(True)
+    # plt.tight_layout()
+    # save_path_plot1 = os.path.join(paths.run.ckpt, "loss_train_val(Sem).png")
+    # plt.savefig(save_path_plot1, dpi=300)
+    # print(f"[INFO] Saved train/val loss plot to {save_path_plot1}")
+    # plt.close()
 
-    # --- 图2：test ---
-    plt.figure(figsize=(8, 6))
-    plt.plot(epochs, test_total_losses, label='Test Loss', color='orange', marker='^')
-    plt.title('Test Total Loss')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    save_path_plot2 = os.path.join(paths.run.ckpt, "loss_test(Sem).png")
-    plt.savefig(save_path_plot2, dpi=300)
-    print(f"[INFO] Saved test loss plot to {save_path_plot2}")
-    plt.close()
+    # # --- 图2：test ---
+    # plt.figure(figsize=(8, 6))
+    # plt.plot(epochs, test_total_losses, label='Test Loss', color='orange', marker='^')
+    # plt.title('Test Total Loss')
+    # plt.xlabel('Epoch')
+    # plt.ylabel('Loss')
+    # plt.legend()
+    # plt.grid(True)
+    # plt.tight_layout()
+    # save_path_plot2 = os.path.join(paths.run.ckpt, "loss_test(Sem).png")
+    # plt.savefig(save_path_plot2, dpi=300)
+    # print(f"[INFO] Saved test loss plot to {save_path_plot2}")
+    # plt.close()
 
     # After all epochs, log best checkpoint info
     msg = (

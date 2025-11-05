@@ -125,9 +125,9 @@ def load_data(load_params):   # 不变
     try:
         func = getattr(sys.modules[__name__], "_".join(["_load_data", params.train.dataset]))
         dataset_train, dataset_validation, dataset_test = func(load_params)
-    except Exception:
+    except AttributeError:
         raise ValueError((
-            "ERROR: Unknown dataset type {} in train.duin.run_cls."
+            "ERROR: Unknown dataset type {} in train.duin.run_align_vis."
         ).format(params.train.dataset))
     # Return the final `dataset_train` & `dataset_validation` & `dataset_test`.
     return dataset_train, dataset_validation, dataset_test
@@ -149,7 +149,7 @@ def _load_data_seeg_he2023xuanwu(load_params):
     print("DEBUG params.model keys:", list(params.model.keys()))
 
     # --- Load supervision embeddings ---
-    emb_path = "/data0/Users/cchu/Du-IN/embeddings/Duin_vit_embeddings.npz"   # 新增加载监督 embedding 表
+    emb_path = "/mnt/afs/250010218/multi-level-Chinese-decoding/embeddings/Duin_vit_embeddings.npz"   # 新增加载监督 embedding 表
     emb_data = np.load(emb_path, allow_pickle=True)
     
     emb_table = emb_data["embeddings"] 
@@ -865,37 +865,37 @@ def train():   # 修改训练循环中的损失函数、输出日志
 
     writer = paths.run.logger.tensorboard; writer.close()
 
-    # ====== 绘制并保存 loss 曲线 ======
-    epochs = range(len(train_total_losses))
+    # # ====== 绘制并保存 loss 曲线 ======
+    # epochs = range(len(train_total_losses))
 
-    # --- 图1：train vs validation ---
-    plt.figure(figsize=(8, 6))
-    plt.plot(epochs, train_total_losses, label='Train Loss', marker='o')
-    plt.plot(epochs, val_total_losses, label='Validation Loss', marker='s')
-    plt.title('Train vs Validation Total Loss')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    save_path_plot1 = os.path.join(paths.run.ckpt, "loss_train_val(vis).png")
-    plt.savefig(save_path_plot1, dpi=300)
-    print(f"[INFO] Saved train/val loss plot to {save_path_plot1}")
-    plt.close()
+    # # --- 图1：train vs validation ---
+    # plt.figure(figsize=(8, 6))
+    # plt.plot(epochs, train_total_losses, label='Train Loss', marker='o')
+    # plt.plot(epochs, val_total_losses, label='Validation Loss', marker='s')
+    # plt.title('Train vs Validation Total Loss')
+    # plt.xlabel('Epoch')
+    # plt.ylabel('Loss')
+    # plt.legend()
+    # plt.grid(True)
+    # plt.tight_layout()
+    # save_path_plot1 = os.path.join(paths.run.ckpt, "loss_train_val(vis).png")
+    # plt.savefig(save_path_plot1, dpi=300)
+    # print(f"[INFO] Saved train/val loss plot to {save_path_plot1}")
+    # plt.close()
 
-    # --- 图2：test ---
-    plt.figure(figsize=(8, 6))
-    plt.plot(epochs, test_total_losses, label='Test Loss', color='orange', marker='^')
-    plt.title('Test Total Loss')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    save_path_plot2 = os.path.join(paths.run.ckpt, "loss_test(vis).png")
-    plt.savefig(save_path_plot2, dpi=300)
-    print(f"[INFO] Saved test loss plot to {save_path_plot2}")
-    plt.close()
+    # # --- 图2：test ---
+    # plt.figure(figsize=(8, 6))
+    # plt.plot(epochs, test_total_losses, label='Test Loss', color='orange', marker='^')
+    # plt.title('Test Total Loss')
+    # plt.xlabel('Epoch')
+    # plt.ylabel('Loss')
+    # plt.legend()
+    # plt.grid(True)
+    # plt.tight_layout()
+    # save_path_plot2 = os.path.join(paths.run.ckpt, "loss_test(vis).png")
+    # plt.savefig(save_path_plot2, dpi=300)
+    # print(f"[INFO] Saved test loss plot to {save_path_plot2}")
+    # plt.close()
 
     # After all epochs, log best checkpoint info
     msg = (

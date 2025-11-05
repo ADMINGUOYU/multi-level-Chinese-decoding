@@ -4,8 +4,16 @@ from sklearn.decomposition import PCA
 from semantic_eval import evaluate_semantic_mapping
 import matplotlib
 import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
 
-matplotlib.rcParams['font.sans-serif'] = ['SimHei']
+# 指定你的字体文件路径
+font_path = '/mnt/afs/250010218/multi-level-Chinese-decoding/Duin_emb/SourceHanSansSC-Normal.otf'
+
+# 添加字体到字体管理器
+font_prop = fm.FontProperties(fname=font_path)
+
+# 方法1：设置全局字体
+plt.rcParams['font.family'] = font_prop.get_name()
 matplotlib.rcParams['axes.unicode_minus'] = False     # 正常显示负号
 
 #注意:
@@ -14,17 +22,23 @@ matplotlib.rcParams['axes.unicode_minus'] = False     # 正常显示负号
 # GT embeddings 可以随意放置，修改路径即可。
 
 # 选择测试类型
-test_type = 'Semantic'
-# test_type = 'Visual'
+# test_type = 'Semantic'
+test_type = 'Visual'
 
 # 选择测试的embedding路径
-path ='output_embeddings/Semantic_Doublelayer_(1024-512)-lr1e-4/test_embeddings_epoch_150.npy'
+path ='/mnt/afs/250010218/multi-level-Chinese-decoding/Duin_emb/output\
+_embeddings/Visual_Doublelayer_(1024-512)-lr1e-4/test_embeddings_epoch_300.npy'
+
 # GT embeddings路径
-GT_semantic_path = 'GT_embeddings/61words/Duin_bert_embeddings.npz'
-GT_visual_path = 'GT_embeddings/61words/Duin_vit_embeddings_vit_whole.npz'
+GT_semantic_path = '/mnt/afs/250010218/multi-level-Chinese-decoding/Duin\
+_emb/GT_embeddings/61words/Duin_bert_embeddings.npz'
+GT_visual_path = '/mnt/afs/250010218/multi-level-Chinese-decoding/Duin_emb\
+/GT_embeddings/61words/Duin_vit_embeddings_vit_whole.npz'
 
 #savedir 是 path 去掉output_embeddings/
-savedir = path[18:]
+savedir = path[38:]
+print(savedir)
+exit()
 if test_type == 'Semantic':
     savedir = 'semantic_eval_out/'+savedir
 else:
