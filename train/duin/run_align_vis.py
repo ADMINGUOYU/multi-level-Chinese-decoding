@@ -23,6 +23,12 @@ import utils; import utils.model.torch; import utils.data.seeg
 from utils.data import load_pickle
 from models.duin import duin_align as duin_model
 
+# GPU DEBUGGING: Disable cuDNN to test if it causes GPU training failure
+import torch.backends.cudnn as cudnn
+cudnn.enabled = False
+cudnn.benchmark = False
+cudnn.deterministic = True
+print("WARNING: cuDNN DISABLED for debuggin GPU training issue")
 
 
 __all__ = [

@@ -413,7 +413,9 @@ def train():
     # Log the start of current training process.
     paths.run.logger.summaries.info("Training started with dataset {}.".format(params.train.dataset))
     # Initialize model device.
-    params.model.device = torch.device("cuda:{:d}".format(0)) if torch.cuda.is_available() else torch.device("cpu")
+    #这里强制指定为CPU尝试一下！！！！！！！！！
+    # params.model.device = torch.device("cuda:{:d}".format(0)) if torch.cuda.is_available() else torch.device("cpu")
+    params.model.device = torch.device("cpu")
     print(params.model.device); paths.run.logger.summaries.info(params.model.device)
     # Initialize load_params. Each load_params_i corresponds to a sub-dataset.
     if params.train.dataset == "seeg_he2023xuanwu":

@@ -22,7 +22,12 @@ if __name__ == "__main__":
 import utils; import utils.model.torch; import utils.data.seeg
 from utils.data import load_pickle
 from models.duin import duin_align as duin_model
-
+# GPU DEBUGGING: Disable cuDNN to test if it causes GPU training failure
+import torch.backends.cudnn as cudnn
+cudnn.enabled = False
+cudnn.benchmark = False
+cudnn.deterministic = True
+print("WARNING: cuDNN DISABLED for debuggin GPU training issue")
 
 
 __all__ = [
@@ -143,7 +148,7 @@ def _load_data_seeg_he2023xuanwu(load_params):
     print("DEBUG params.model keys:", list(params.model.keys()))
 
     # --- Load supervision embeddings ---
-    emb_path = "/data0/Users/cchu/Du-IN/embeddings/Duin_bert_embeddings.npz"   # 新增加载监督 embedding 表
+    emb_path = "/mnt/afs/250010218/multi-level-Chinese-decoding/embeddings/Duin_bert_embeddings.npz"   # 新增加载监督 embedding 表
     emb_data = np.load(emb_path)
     emb_table = emb_data["emb_mean"] 
     emb_words = emb_data["words"]  # 或 "chars"，看 npz 内部字段名

@@ -1,0 +1,18 @@
+{
+  "overall": {
+    "topk": {
+      "hits@1": 0.4164133667945862,
+      "hits@3": 0.5349544286727905,
+      "hits@5": 0.5744680762290955,
+      "hits@10": 0.6443768739700317
+    },
+    "MRR": 0.5004857709026974,
+    "accuracy": 0.41641337386018235,
+    "ARI": 0.19337807390436446,
+    "NMI": 0.6881100302096665
+  },
+  "per_class_csv": "semantic_eval_out/Semantic_Doublelayer_(512-256)_lr1e-4/test_embeddings_epoch_200_2/per_class_report.csv",
+  "confusion_matrix_png": "semantic_eval_out/Semantic_Doublelayer_(512-256)_lr1e-4/test_embeddings_epoch_200_2/fig_confusion.png",
+  "projection_png": "semantic_eval_out/Semantic_Doublelayer_(512-256)_lr1e-4/test_embeddings_epoch_200_2/fig_projection.png",
+  "note": "Confusion matrix axes use class indices; map via GT_labels_semantic."
+}

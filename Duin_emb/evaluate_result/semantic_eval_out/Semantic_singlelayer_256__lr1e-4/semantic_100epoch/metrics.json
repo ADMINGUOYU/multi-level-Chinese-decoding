@@ -1,0 +1,18 @@
+{
+  "overall": {
+    "topk": {
+      "hits@1": 0.2036474198102951,
+      "hits@3": 0.3677811622619629,
+      "hits@5": 0.4559270441532135,
+      "hits@10": 0.5835866332054138
+    },
+    "MRR": 0.3271510618638518,
+    "accuracy": 0.20364741641337386,
+    "ARI": 0.05284601969894355,
+    "NMI": 0.5397632192419822
+  },
+  "per_class_csv": "semantic_eval_out/semantic_100epoch/per_class_report.csv",
+  "confusion_matrix_png": "semantic_eval_out/semantic_100epoch/fig_confusion.png",
+  "projection_png": "semantic_eval_out/semantic_100epoch/fig_projection.png",
+  "note": "Confusion matrix axes use class indices; map via GT_labels_semantic."
+}

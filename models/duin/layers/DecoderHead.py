@@ -780,6 +780,7 @@ class LLMCLSHead(nn.Module):
         return self.cls_head(emb)
 
 
+##新增部分！！
 # def AlignHead class
 class AlignHead(nn.Module):
     """
