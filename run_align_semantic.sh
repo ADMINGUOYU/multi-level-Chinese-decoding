@@ -6,7 +6,7 @@
 # Adjust parameters below for hyperparameter tuning experiments.
 ################################################################################
 
-# Experiment Target: using previous parameter(mlp layers& batchsize), tring to reproduce previous result.
+# Experiment Target: using previous parameter(mlp layers& batchsize& lr), tring to reproduce previous result.
 
 # Get the absolute path of this script (MUST be before changing directory)
 SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
@@ -19,7 +19,7 @@ PT_CKPT="./pretrains/duin/001/mae/model/checkpoint-399.pth"  # Pre-trained check
 
 # Learning rate schedule
 LR_MIN=1e-5                   # Minimum learning rate (cosine annealing end)
-LR_MAX=5e-4                   # Maximum learning rate (after warmup)
+LR_MAX=1e-4                   # Maximum learning rate (after warmup)
 
 # Training schedule
 N_EPOCHS=300                  # Total number of training epochs
@@ -31,7 +31,7 @@ CONTRA_LOSS_SCALE=0.5         # Contrastive loss scale (should be relatively sma
 ALIGN_LOSS_SCALE=5.0          # Alignment loss scale (primary objective)
 
 # Alignment head architecture
-D_HIDDEN="1024,512"           # Hidden layer dimensions (comma-separated, e.g., "1024,512" or "2048,1024,512")
+D_HIDDEN="512,256"           # Hidden layer dimensions (comma-separated, e.g., "1024,512" or "2048,1024,512")
 ALIGN_DROPOUT=0.1             # Dropout rate for alignment head
 D_OUTPUT=768                  # Output embedding dimension (should match target embeddings)
 

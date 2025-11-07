@@ -8,7 +8,12 @@ import matplotlib.font_manager as fm
 
 # 选择测试的embedding路径
 path ='/mnt/afs/250010218/multi-level-Chinese-decoding/' \
-'summaries/2025-11-07/1/train/save_embeddings/test_embeddings_epoch_150.npy'
+'summaries/2025-11-07/3/train/save_embeddings/test_embeddings_epoch_050.npy'
+
+log_index = path[58:71]
+if log_index[-1] == '/':
+    log_index=log_index[:-1]
+log_index = log_index.replace('/', '-')
 
 
 # 选择测试类型
@@ -41,9 +46,9 @@ GT_visual_path = '/mnt/afs/250010218/multi-level-Chinese-decoding/GT_embeddings/
 savedir = path[-29:]
 
 if test_type == 'Semantic':
-    savedir = '/mnt/afs/250010218/multi-level-Chinese-decoding/evaluate/embeddings_alignment/semantic_eval_out/'+savedir
+    savedir = '/mnt/afs/250010218/multi-level-Chinese-decoding/evaluate/embeddings_alignment/semantic_eval_out/'+log_index+'/'+savedir
 else:
-    savedir ='/mnt/afs/250010218/multi-level-Chinese-decoding/evaluate/embeddings_alignment/visual_eval_out/'+savedir
+    savedir ='/mnt/afs/250010218/multi-level-Chinese-decoding/evaluate/embeddings_alignment/visual_eval_out/'+log_index+'/'+savedir
 
 #label list
 label_list = ['丝瓜', '你', '关门', '凳子', '厕所', '口渴', '吃',\
