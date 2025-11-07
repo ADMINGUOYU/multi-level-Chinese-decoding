@@ -8,8 +8,12 @@ import matplotlib.font_manager as fm
 
 # 选择测试的embedding路径
 path ='/mnt/afs/250010218/multi-level-Chinese-decoding/' \
-'summaries/2025-11-07/0/train/save_embeddings/test_embeddings_epoch_250.npy'
+'summaries/2025-11-07/1/train/save_embeddings/test_embeddings_epoch_150.npy'
 
+
+# 选择测试类型
+test_type = 'Semantic'
+# test_type = 'Visual'
 
 # 指定你的字体文件路径
 font_path = '/mnt/afs/250010218/multi-level-Chinese-decoding/Duin_emb/SourceHanSansSC-Normal.otf'
@@ -26,9 +30,7 @@ matplotlib.rcParams['axes.unicode_minus'] = False     # 正常显示负号
 # 后续的文件命名没有详细要求，但推荐按照我的命名方式，方便区分不同参数结构
 # GT embeddings 可以随意放置，修改路径即可。
 
-# 选择测试类型
-# test_type = 'Semantic'
-test_type = 'Visual'
+
 
 
 # GT embeddings路径

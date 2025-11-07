@@ -1,0 +1,18 @@
+{
+  "overall": {
+    "topk": {
+      "hits@1": 0.7437499761581421,
+      "hits@3": 0.800000011920929,
+      "hits@5": 0.8187500238418579,
+      "hits@10": 0.8500000238418579
+    },
+    "MRR": 0.7842728852188674,
+    "accuracy": 0.74375,
+    "ARI": 0.523481801750337,
+    "NMI": 0.8474464250505874
+  },
+  "per_class_csv": "/mnt/afs/250010218/multi-level-Chinese-decoding/evaluate/embeddings_alignment/semantic_eval_out/test_embeddings_epoch_150.npy/per_class_report.csv",
+  "confusion_matrix_png": "/mnt/afs/250010218/multi-level-Chinese-decoding/evaluate/embeddings_alignment/semantic_eval_out/test_embeddings_epoch_150.npy/fig_confusion.png",
+  "projection_png": "/mnt/afs/250010218/multi-level-Chinese-decoding/evaluate/embeddings_alignment/semantic_eval_out/test_embeddings_epoch_150.npy/fig_projection.png",
+  "note": "Confusion matrix axes use class indices; map via GT_labels_semantic."
+}

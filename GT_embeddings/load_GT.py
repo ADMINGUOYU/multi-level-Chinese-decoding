@@ -24,8 +24,9 @@ def load_npz_acoustic(path):
 
 
 
-# chars,emb = load_npz_acoustic('GT_embeddings/Duin_Acoustic_label.npz')
+chars,emb = load_npz_acoustic('GT_embeddings/Duin_Acoustic_label.npz')
 # chars,emb = load_npz_semantic('GT_embeddings/Duin_Semantic_GT_bert.npz')
-chars,emb = load_npz_vis('GT_embeddings/Duin_Visual_GT_VitPerchar.npz')
+# chars,emb = load_npz_vis('GT_embeddings/Duin_Visual_GT_VitPerchar.npz')
 print(chars)
+print(emb[0])
 print(emb[0].shape)
