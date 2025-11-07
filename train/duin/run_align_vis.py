@@ -814,17 +814,22 @@ def train():   # 修改训练循环中的损失函数、输出日志
                 best_val_loss = loss_validation["total"]
                 best_epoch = epoch_idx
                 # Save initial model
-                save_path = os.path.join(paths.run.ckpt, f"epoch_{epoch_idx:03d}_loss_{best_val_loss:.5f}.pt")
-                torch.save(model.state_dict(), save_path)
-                msg = f"Initial checkpoint saved at {save_path}"
+                best_ckpt_path = os.path.join(paths.run.ckpt, f"epoch_{epoch_idx:03d}_loss_{best_val_loss:.5f}.pt")
+                torch.save(model.state_dict(), best_ckpt_path)
+                msg = f"Initial checkpoint saved at {best_ckpt_path}"
                 print(msg); paths.run.logger.summaries.info(msg)
             else:
                 current_val_loss = loss_validation["total"]
                 if current_val_loss < best_val_loss:
+                    # Delete previous best checkpoint
+                    if os.path.exists(best_ckpt_path):
+                        os.remove(best_ckpt_path)
+                        print(f"Removed previous best checkpoint: {best_ckpt_path}")
+
                     best_val_loss = current_val_loss
                     best_epoch = epoch_idx
-                    save_path = os.path.join(paths.run.ckpt, f"best_epoch_{epoch_idx:03d}_loss_{best_val_loss:.5f}.pt")
-                    torch.save(model.state_dict(), save_path)
+                    best_ckpt_path = os.path.join(paths.run.ckpt, f"best_epoch_{epoch_idx:03d}_loss_{best_val_loss:.5f}.pt")
+                    torch.save(model.state_dict(), best_ckpt_path)
                     msg = f"New best model saved (epoch {epoch_idx}) with val_loss={best_val_loss:.6f}"
                     print(msg); paths.run.logger.summaries.info(msg)
 

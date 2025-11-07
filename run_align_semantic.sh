@@ -29,7 +29,7 @@ CONTRA_LOSS_SCALE=0.5         # Contrastive loss scale (should be relatively sma
 ALIGN_LOSS_SCALE=5.0          # Alignment loss scale (primary objective)
 
 # Alignment head architecture
-D_HIDDEN="1024,512"           # Hidden layer dimensions (comma-separated, e.g., "1024,512" or "2048,1024,512")
+D_HIDDEN="2048,1024,768"           # Hidden layer dimensions (comma-separated, e.g., "1024,512" or "2048,1024,512")
 ALIGN_DROPOUT=0.1             # Dropout rate for alignment head
 D_OUTPUT=768                  # Output embedding dimension (should match target embeddings)
 

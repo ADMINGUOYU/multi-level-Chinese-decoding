@@ -22,14 +22,14 @@ LR_MAX=5e-4                   # Maximum learning rate (after warmup)
 # Training schedule
 N_EPOCHS=300                  # Total number of training epochs
 WARMUP_EPOCHS=20              # Number of warmup epochs (linear warmup)
-BATCH_SIZE=32                 # Batch size for training
+BATCH_SIZE=64                 # Batch size for training
 
 # Loss scales (adjust to balance multi-task objectives)
 CONTRA_LOSS_SCALE=0.5         # Contrastive loss scale (should be relatively small)
 ALIGN_LOSS_SCALE=5.0          # Alignment loss scale (primary objective)
 
 # Alignment head architecture
-D_HIDDEN="1024,512"           # Hidden layer dimensions (comma-separated, e.g., "1024,512" or "2048,1024,512")
+D_HIDDEN="2048,1024,768"           # Hidden layer dimensions (comma-separated, e.g., "1024,512" or "2048,1024,512")
 ALIGN_DROPOUT=0.1             # Dropout rate for alignment head
 D_OUTPUT=768                  # Output embedding dimension (should match target embeddings)
 
