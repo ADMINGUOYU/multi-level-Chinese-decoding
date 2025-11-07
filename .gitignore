@@ -7,4 +7,5 @@
 /summaries*
 /slurm
 /pretrains
-
+/evaluate/embeddings_alignment/semantic_eval_out
+/evaluate/embeddings_alignment/visual_eval_out

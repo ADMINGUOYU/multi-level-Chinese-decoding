@@ -8,7 +8,7 @@ import matplotlib.font_manager as fm
 
 # 选择测试的embedding路径
 path ='/mnt/afs/250010218/multi-level-Chinese-decoding/' \
-'summaries/2025-11-07/3/train/save_embeddings/test_embeddings_epoch_050.npy'
+'summaries/2025-11-07/4/train/save_embeddings/test_embeddings_epoch_100.npy'
 
 log_index = path[58:71]
 if log_index[-1] == '/':

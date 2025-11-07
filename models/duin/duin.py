@@ -1225,6 +1225,232 @@ class duin_llm(nn.Module):
         """
         return self.subj_block.get_weight_i()
 
+class duin_acoustic_cls(nn.Module):
+    """
+    DuIN model for acoustic tone classification task.
+    Predicts two tone labels (5 classes each) for Chinese word reading.
+    """
+
+    def __init__(self, params, **kwargs):
+        """
+        Initialize `duin_acoustic_cls` object.
+
+        Args:
+            params: DotDict - Model parameters initialized by duin_acoustic_cls_params, updated by params.iteration.
+            kwargs: dict - The arguments related to initialize `nn.Module`-style object.
+
+        Returns:
+            None
+        """
+        # First call super class init function to set up `nn.Module`
+        # style model and inherit it's functionality.
+        super(duin_acoustic_cls, self).__init__(**kwargs)
+
+        # Initialize parameters.
+        self.params = cp.deepcopy(params)
+
+        # Initialize variables.
+        self._init_model(); self._init_weight()
+
+    """
+    init funcs
+    """
+    # def _init_model func
+    def _init_model(self):
+        """
+        Initialize model architecture.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        # Initialize subject block.
+        # subj_block - (batch_size, seq_len, n_channels) -> (batch_size, seq_len, d_neural)
+        self.subj_block = SubjectBlock(params=self.params.subj)
+        # Initialize tokenizer block.
+        # tokenizer - (batch_size, seq_len, d_neural) -> (batch_size, token_len, d_model)
+        self.tokenizer = PatchTokenizer(params=self.params.tokenizer)
+        # Initialize time embedding block.
+        # emb_time - (batch_size, token_len, d_model) -> (batch_size, token_len, d_model)
+        assert (self.params.encoder.rot_theta is None)
+        self.emb_time = TimeEmbedding(d_model=self.params.encoder.d_model, max_len=self.params.encoder.emb_len, mode="sincos")
+        # Initialize encoder block.
+        # encoder - (batch_size, emb_len, d_model) -> (batch_size, emb_len, d_model)
+        self.encoder = nn.Sequential(
+            LambdaLayer(func=(lambda x: self.emb_time(x))),
+            TransformerStack(self.params.encoder), LambdaLayer(func=(lambda x: x[0])),
+        )
+        # Initialize classification blocks for tone1 and tone2.
+        # cls_blocks - (batch_size, token_len, d_model) -> (batch_size, token_len, n_tones)
+        cls_tone1_params = cp.deepcopy(self.params.cls); cls_tone1_params.n_tokens = cls_tone1_params.n_tone1
+        cls_tone2_params = cp.deepcopy(self.params.cls); cls_tone2_params.n_tokens = cls_tone2_params.n_tone2
+        self.cls_blocks = nn.ModuleList(modules=[
+            TokenCLSHead(params=cls_tone1_params),
+            TokenCLSHead(params=cls_tone2_params),
+        ])
+
+    # def _init_weight func
+    def _init_weight(self):
+        """
+        Initialize model weights.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        pass
+
+    """
+    load funcs
+    """
+    # def load_weight func
+    def load_weight(self, path_ckpt):
+        """
+        Load model weights from the specified checkpoint path.
+
+        Args:
+            path_ckpt: str - The path of the spcified checkpoint.
+
+        Returns:
+            None
+        """
+        # Initialize `ckpt_dict`.
+        ckpt_dict = torch.load(path_ckpt)
+        # Construct `model_dict` according to `ckpt_dict`.
+        model_dict = {}; module_map = {
+            "([^.]*\.)*subj_block": "subj_block",
+            "([^.]*\.)*tokenizer": "tokenizer",
+            "([^.]*\.)*encoder": "encoder",
+        }
+        for parameter_name_i in ckpt_dict.keys():
+            for module_src_i, module_trg_i in module_map.items():
+                if re.compile(module_src_i).match(parameter_name_i) is not None:
+                    parameter_rename_i = re.sub(module_src_i, module_trg_i, parameter_name_i)
+                    model_dict[parameter_rename_i] = ckpt_dict[parameter_name_i]; break
+        for key_i in model_dict.keys():
+            assert key_i in self.state_dict().keys()
+        assert len(model_dict.keys()) > 0; self.load_state_dict(model_dict, strict=False)
+        # Log information related to parameter load.
+        modules = sorted(set([key_i.split(".")[0] for key_i in model_dict.keys()]))
+        print((
+            "INFO: Complete loading pretrained weights of modules ({}) from checkpoint ({}) in models.duin.duin_acoustic_cls."
+        ).format(modules, path_ckpt))
+
+    """
+    network funcs
+    """
+    # def forward func
+    def forward(self, inputs):
+        """
+        Forward `duin_acoustic_cls` to get the final predictions.
+
+        Args:
+            inputs: tuple - The input data, including [X,t_true,subj_id,token_mask].
+
+        Returns:
+            t_pred: (2[list], batch_size, token_len, n_tones) - The predicted tones.
+            loss: torch.float32 - The corresponding loss.
+        """
+        # Initialize components of inputs.
+        # X - (batch_size, seq_len, n_channels); t_true - (2[list], batch_size, token_len, n_tones)
+        # subj_id - (batch_size, n_subjects); token_mask - (batch_size, token_len)
+        X = inputs[0]; t_true = inputs[1]; subj_id = inputs[2]; token_mask = inputs[3]
+        # Forward subject block to get the subject-transformed signals (which share the same space).
+        # `X_h` is the projection of the original data in the common hidden space (shared by all subjects).
+        # This process will not reduce the resolution, e.g., for 1D-signal, `data_len` holds for `X_h`.
+        # X_h - (batch_size, seq_len, d_neural)
+        X_h = self.subj_block((X, subj_id))
+        # Forward tokenizer to get the tokenized tokens, this process may reduce the resolution.
+        # For example, if `X_h` is 1D-signal of shape (batch_size, data_len, d_neural), the resolution
+        # along non-channel axis may be reduced, i.e., `T` is of shape (batch_size, token_len, d_model).
+        # Record the shape of tokens before forwarding encoder, so we can reshape after decoder.
+        # T - (batch_size, token_len, d_model)
+        T = self.tokenizer(X_h); token_shape = T.shape
+        # Reshape tokens to get the init embedding.
+        # E - (batch_size, emb_len, d_model)
+        E = torch.reshape(T, shape=(token_shape[0], -1, token_shape[-1]))
+        # Forward encoder block to get time-aligned token sequence.
+        E = self.encoder(E)
+        # Forward classification block to get the prediction tones.
+        # t_pred - (2[list], batch_size, token_len, n_tones)
+        t_pred = [self.cls_blocks[tone_idx](E) for tone_idx in range(len(self.cls_blocks))]
+        # Calculate the classification loss.
+        # loss_cls - torch.float32
+        weight = token_mask.to(dtype=t_pred[0].dtype)
+        loss_cls_list = [self._loss_cls(t_pred_i, t_true_i, weight=weight)\
+            for t_pred_i, t_true_i in zip(t_pred, t_true)]
+        loss_cls = torch.mean(torch.stack(loss_cls_list, dim=0))
+        # Calculate the total loss.
+        # loss_total - torch.float32
+        loss_total = (
+            self.params.cls_loss_scale * loss_cls
+        )
+        # Calculate the final loss.
+        # loss - DotDict
+        loss = DotDict({
+            "total": loss_total,
+            "cls": loss_cls,
+            "cls_tone1": loss_cls_list[0],
+            "cls_tone2": loss_cls_list[1],
+        })
+        # Return the final `t_pred` & `loss`.
+        return t_pred, loss
+
+    """
+    loss funcs
+    """
+    # def _loss_cls func
+    def _loss_cls(self, value, target, weight=None):
+        """
+        Calculates classification loss between tensors value and target.
+        Get mean over last dimension to keep losses of different batches separate.
+
+        Args:
+            value: (batch_size, emb_len, n_tones) - Value of the object.
+            target: (batch_size, emb_len, n_tones) - Target of the object.
+            weight: (batch_size, d_llm) - The regression weight.
+
+        Returns:
+            loss: torch.float32 - Loss between value and target.
+        """
+        # Initialize `batch_size` & `emb_len` & `n_tones` from `value`.
+        batch_size, emb_len, n_tones = value.shape
+        # Calculate the cross-entropy loss.
+        # loss - (batch_size, emb_len)
+        loss = torch.reshape(F.cross_entropy(
+            # Modified `cross_entropy` function arguments.
+            input=torch.reshape(value, shape=(-1, n_tones)), target=torch.reshape(target, shape=(-1, n_tones)),
+            # Default `cross_entropy` function arguments.
+            weight=None, size_average=None, ignore_index=-100,
+            reduce=None, reduction="none", label_smoothing=0.
+        ), shape=(batch_size, emb_len))
+        # Weight loss according to weight.
+        # loss - torch.float32
+        loss = torch.sum(loss * weight) / (torch.sum(weight) + 1e-12)\
+            if weight is not None else torch.mean(loss)
+        # Return the final `loss`.
+        return loss
+
+    """
+    tool funcs
+    """
+    # def get_weight_i func
+    def get_weight_i(self):
+        """
+        Get the contribution weights of each input channel.
+
+        Args:
+            None
+
+        Returns:
+            ch_weights: (n_subjects, n_channels) - The contribution weights of each input channel.
+        """
+        return self.subj_block.get_weight_i()
+
 if __name__ == "__main__":
     import numpy as np
     # local dep

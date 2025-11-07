@@ -1279,6 +1279,134 @@ class duin_llm_params(duin_params):
             # The learning rate factors of training process.
             self.train.lr_factors = (1e-5, 3e-4)
 
+class duin_acoustic_cls_params(duin_params):
+    """
+    This contains one single object that generates a dictionary of parameters,
+    which is provided to `duin_acoustic_cls` on initialization.
+    """
+
+    def __init__(self, dataset="seeg_he2023xuanwu"):
+        """
+        Initialize `duin_acoustic_cls_params` object.
+        """
+        ## First call super class init function to set up `DotDict`
+        ## style object and inherit it's functionality.
+        super(duin_acoustic_cls_params, self).__init__(dataset=dataset)
+
+        ## Update all parameters hierarchically.
+        # -- Model parameters
+        self._update_model_params()
+        # -- Train parameters
+        self._update_train_params()
+
+        ## Do init iteration.
+        duin_acoustic_cls_params.iteration(self, 0)
+
+    """
+    update funcs
+    """
+    # def iteration func
+    def iteration(self, iteration):
+        """
+        Update parameters at every backpropagation iteration/gradient update.
+        """
+        ## Iterate super parameters.
+        super(duin_acoustic_cls_params, self).iteration(iteration)
+        ## -- Train parameters
+        # Calculate current learning rate.
+        lr_min, lr_max = self.train.lr_factors
+        # If `iteration` is smaller than `params.train.warmup_epochs`, gradually increase `lr`.
+        if iteration < self.train.warmup_epochs:
+            self.train.lr_i = lr_max * ((iteration + 1) / self.train.warmup_epochs)
+        # After `config.warmup_epochs`, decay the learning rate with half-cycle cosine after warmup.
+        else:
+            self.train.lr_i = lr_min + (lr_max - lr_min) * 0.5 *\
+                (1. + np.cos(np.pi * (iteration - self.train.warmup_epochs) / (self.train.n_epochs - self.train.warmup_epochs)))
+
+    ## def _update_model_* funcs
+    # def _update_model_params func
+    def _update_model_params(self):
+        """
+        Update model parameters.
+        """
+        ## -- Normal parameters
+        # The scale factor of cls loss.
+        self.model.cls_loss_scale = 1.
+        ## -- Classification parameters
+        self._update_model_cls_params()
+
+    # def _update_model_cls_params func
+    def _update_model_cls_params(self):
+        """
+        Update model.cls parameters.
+        """
+        # Initialize `model_cls_params`.
+        self.model.cls = DotDict()
+        ## -- Normal parameters
+        # The dimensions of model embedding.
+        self.model.cls.d_model = self.model.encoder.d_model
+        # Normal parameters related to seeg_he2023xuanwu dataset.
+        if self.model.dataset == "seeg_he2023xuanwu":
+            # The dimensions of the hidden layers.
+            self.model.cls.d_hidden = [128,]
+            # The dropout probability after the hidden layers.
+            self.model.cls.dropout = 0.
+        # Normal parameters related to eeg_zhou2023cibr dataset.
+        elif self.model.dataset == "eeg_zhou2023cibr":
+            # The dimensions of the hidden layers.
+            self.model.cls.d_hidden = [128,]
+            # The dropout probability after the hidden layers.
+            self.model.cls.dropout = 0.
+        # Normal parameters related to other dataset.
+        else:
+            # The dimensions of the hidden layers.
+            self.model.cls.d_hidden = [128,]
+            # The dropout probability after the hidden layers.
+            self.model.cls.dropout = 0.
+        # The number of tone classes (5 tones in Mandarin: tone1, tone2, tone3, tone4, neutral)
+        self.model.cls.n_tone1 = 5
+        self.model.cls.n_tone2 = 5
+
+    ## def _update_train_* funcs
+    # def _update_train_params func
+    def _update_train_params(self):
+        """
+        Update train parameters.
+        """
+        ## -- Normal parameters
+        # Normal parameters related to seeg_he2023xuanwu dataset.
+        if self.train.dataset == "seeg_he2023xuanwu":
+            # Number of epochs used in training process.
+            self.train.n_epochs = 200
+            # Number of warmup epochs.
+            self.train.warmup_epochs = 20
+            # Number of batch size used in training process.
+            # Note: `64` is best for one subject. All subjects share one batch.
+            self.train.batch_size = 32
+            # The learning rate factors of training process.
+            self.train.lr_factors = (5e-5, 2e-4)
+        # Normal parameters related to eeg_zhou2023cibr dataset.
+        elif self.train.dataset == "eeg_zhou2023cibr":
+            # Number of epochs used in training process.
+            self.train.n_epochs = 50
+            # Number of warmup epochs.
+            self.train.warmup_epochs = 5
+            # Number of batch size used in training process.
+            # Note: `64` is best for one subject. All subjects share one batch.
+            self.train.batch_size = 64
+            # The learning rate factors of training process.
+            self.train.lr_factors = (5e-6, 2e-4)
+        # Normal parameters related to other dataset.
+        else:
+            # Number of epochs used in training process.
+            self.train.n_epochs = 100
+            # Number of warmup epochs.
+            self.train.warmup_epochs = 10
+            # Number of batch size used in training process.
+            self.train.batch_size = 16
+            # The learning rate factors of training process.
+            self.train.lr_factors = (1e-5, 3e-4)
+
 if __name__ == "__main__":
     # Instantiate `duin_params`.
     duin_params_inst = duin_params(dataset="seeg_he2023xuanwu")
@@ -1291,4 +1419,6 @@ if __name__ == "__main__":
     duin_align_params_inst = duin_align_params(dataset="seeg_he2023xuanwu")   # 新增
     # Instantiate `duin_llm_params`.
     duin_llm_params_inst = duin_llm_params(dataset="seeg_he2023xuanwu")
+    # Instantiate `duin_acoustic_cls_params`.
+    duin_acoustic_cls_params_inst = duin_acoustic_cls_params(dataset="seeg_he2023xuanwu")
 

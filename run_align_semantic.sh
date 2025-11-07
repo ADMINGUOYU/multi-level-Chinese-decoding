@@ -6,32 +6,32 @@
 # Adjust parameters below for hyperparameter tuning experiments.
 ################################################################################
 
-# Experiment Target: using previous parameter(mlp layers& batchsize& lr), tring to reproduce previous result.
+# Experiment Target: try to train on sub11
 
 # Get the absolute path of this script (MUST be before changing directory)
 SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 
 # Basic configuration
 SEEDS="42"                    # Random seeds (space-separated for multiple runs)
-SUBJS="001"                   # Subject IDs (space-separated for multiple subjects)
+SUBJS="011"                   # Subject IDs (space-separated for multiple subjects)
 SUBJ_IDXS="0"                 # Subject indices (must match number of subjects)
 PT_CKPT="./pretrains/duin/001/mae/model/checkpoint-399.pth"  # Pre-trained checkpoint path
 
 # Learning rate schedule
 LR_MIN=1e-5                   # Minimum learning rate (cosine annealing end)
-LR_MAX=1e-4                   # Maximum learning rate (after warmup)
+LR_MAX=3e-4                   # Maximum learning rate (after warmup)
 
 # Training schedule
 N_EPOCHS=300                  # Total number of training epochs
-WARMUP_EPOCHS=20              # Number of warmup epochs (linear warmup)
-BATCH_SIZE=32                 # Batch size for training
+WARMUP_EPOCHS=25              # Number of warmup epochs (linear warmup)
+BATCH_SIZE=64                 # Batch size for training
 
 # Loss scales (adjust to balance multi-task objectives)
 CONTRA_LOSS_SCALE=0.5         # Contrastive loss scale (should be relatively small)
 ALIGN_LOSS_SCALE=5.0          # Alignment loss scale (primary objective)
 
 # Alignment head architecture
-D_HIDDEN="512,256"           # Hidden layer dimensions (comma-separated, e.g., "1024,512" or "2048,1024,512")
+D_HIDDEN="2048,1024,768"           # Hidden layer dimensions (comma-separated, e.g., "1024,512" or "2048,1024,512")
 ALIGN_DROPOUT=0.1             # Dropout rate for alignment head
 D_OUTPUT=768                  # Output embedding dimension (should match target embeddings)
 
