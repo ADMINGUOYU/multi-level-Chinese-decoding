@@ -20,9 +20,8 @@ SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SO
 
 # Basic configuration
 SEEDS="42"                    # Random seeds (space-separated for multiple runs)
-SUBJS="001"                   # Subject IDs (space-separated for multiple subjects)
-SUBJ_IDXS="0"                 # Subject indices (must match number of subjects)
-PT_CKPT="./pretrains/duin/001/mae/model/checkpoint-399.pth"  # Pre-trained checkpoint path
+# Subject list - will loop through all subjects sequentially
+ALL_SUBJS=("001" "002" "003" "004" "005" "006" "007" "008" "009" "010" "011" "012")
 
 # Learning rate schedule
 LR_MIN=1e-5                   # Minimum learning rate (cosine annealing end)
@@ -60,24 +59,41 @@ USE_L2_NORM=true              # Apply L2 normalization to logits before computin
 # Change to training directory
 cd train/duin
 
-python run_cls_acoustic.py \
-    --seeds ${SEEDS} \
-    --subjs ${SUBJS} \
-    --subj_idxs ${SUBJ_IDXS} \
-    --pt_ckpt ${PT_CKPT} \
-    --lr_min ${LR_MIN} \
-    --lr_max ${LR_MAX} \
-    --n_epochs ${N_EPOCHS} \
-    --warmup_epochs ${WARMUP_EPOCHS} \
-    --batch_size ${BATCH_SIZE} \
-    --attn_dropout ${ATTN_DROPOUT} \
-    --ff_dropout ${FF_DROPOUT} \
-    --n_blocks ${N_BLOCKS} \
-    --n_heads ${N_HEADS} \
-    --d_hidden ${D_HIDDEN} \
-    --cls_dropout ${CLS_DROPOUT} \
-    --use_l2_norm ${USE_L2_NORM} \
-    --run_script "${SCRIPT_PATH}"
+# Loop through all subjects sequentially
+for SUBJ in "${ALL_SUBJS[@]}"; do
+    echo "========================================="
+    echo "Training acoustic classification for subject ${SUBJ}..."
+    echo "========================================="
+
+    # Set subject-specific pretrained checkpoint
+    PT_CKPT="./pretrains/duin/${SUBJ}/mae/model/checkpoint-399.pth"
+
+    python run_cls_acoustic.py \
+        --seeds ${SEEDS} \
+        --subjs ${SUBJ} \
+        --subj_idxs 0 \
+        --pt_ckpt ${PT_CKPT} \
+        --lr_min ${LR_MIN} \
+        --lr_max ${LR_MAX} \
+        --n_epochs ${N_EPOCHS} \
+        --warmup_epochs ${WARMUP_EPOCHS} \
+        --batch_size ${BATCH_SIZE} \
+        --attn_dropout ${ATTN_DROPOUT} \
+        --ff_dropout ${FF_DROPOUT} \
+        --n_blocks ${N_BLOCKS} \
+        --n_heads ${N_HEADS} \
+        --d_hidden ${D_HIDDEN} \
+        --cls_dropout ${CLS_DROPOUT} \
+        --use_l2_norm ${USE_L2_NORM} \
+        --run_script "${SCRIPT_PATH}"
+
+    echo "Finished training subject ${SUBJ}"
+    echo ""
+done
+
+echo "========================================="
+echo "All subjects acoustic classification training completed!"
+echo "========================================="
 
 ################################################################################
 # Example: Multi-seed training for statistical evaluation

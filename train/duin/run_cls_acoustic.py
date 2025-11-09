@@ -695,6 +695,10 @@ def train():
         optim_cfg = utils.DotDict({"name":"adamw","lr":params.train.lr_i,"weight_decay":0.05,})
         optimizer = utils.model.torch.create_optimizer(cfg=optim_cfg, model=model)
 
+        # Create checkpoint and best_result directories
+        os.makedirs(os.path.join(paths.run.train, "ckpt"), exist_ok=True)
+        os.makedirs(os.path.join(paths.run.train, "best_result"), exist_ok=True)
+
         for epoch_idx in range(params.train.n_epochs):
             # Update params according to `epoch_idx`, then update optimizer.lr.
             params.iteration(iteration=epoch_idx)
@@ -826,8 +830,15 @@ def train():
                 best_epoch_tone1 = epoch_idx
                 best_logits_tone1 = all_val_logits_tone1.copy()
                 best_labels_tone1 = all_val_labels_tone1.copy()
-                # Save best predictions for tone1 to train directory
-                save_best_predictions(paths.run.train, best_logits_tone1, best_labels_tone1, best_epoch_tone1, 'tone1')
+                # Save best predictions for tone1 to train/best_result directory
+                save_best_predictions(os.path.join(paths.run.train, "best_result"),
+                                     best_logits_tone1, best_labels_tone1, best_epoch_tone1, 'tone1')
+                # Save model checkpoint for tone1
+                ckpt_path = os.path.join(paths.run.train, "ckpt",
+                                        f"best_epoch_{epoch_idx:03d}_tone1_acc_{current_val_acc_tone1:.4f}.pt")
+                torch.save(model.state_dict(), ckpt_path)
+                msg = f"INFO: Saved best tone1 checkpoint to {ckpt_path}"
+                print(msg); paths.run.logger.summaries.info(msg)
 
             # Check if this is the best epoch for tone2 and save if so
             current_val_acc_tone2 = np.mean(accuracy_validation_tone2)
@@ -836,11 +847,21 @@ def train():
                 best_epoch_tone2 = epoch_idx
                 best_logits_tone2 = all_val_logits_tone2.copy()
                 best_labels_tone2 = all_val_labels_tone2.copy()
-                # Save best predictions for tone2 to train directory
-                save_best_predictions(paths.run.train, best_logits_tone2, best_labels_tone2, best_epoch_tone2, 'tone2')
+                # Save best predictions for tone2 to train/best_result directory
+                save_best_predictions(os.path.join(paths.run.train, "best_result"),
+                                     best_logits_tone2, best_labels_tone2, best_epoch_tone2, 'tone2')
+                # Save model checkpoint for tone2
+                ckpt_path = os.path.join(paths.run.train, "ckpt",
+                                        f"best_epoch_{epoch_idx:03d}_tone2_acc_{current_val_acc_tone2:.4f}.pt")
+                torch.save(model.state_dict(), ckpt_path)
+                msg = f"INFO: Saved best tone2 checkpoint to {ckpt_path}"
+                print(msg); paths.run.logger.summaries.info(msg)
 
             # Prepare for model test process.
             accuracy_test_tone1 = []; accuracy_test_tone2 = []; loss_test = utils.DotDict()
+            # Collect all test predictions and labels for saving alongside validation best
+            all_test_logits_tone1 = []; all_test_labels_tone1 = []
+            all_test_logits_tone2 = []; all_test_labels_tone2 = []
             # Execute test process.
             for test_batch in dataset_test:
                 # Initialize `batch_i` from `test_batch`.
@@ -861,6 +882,11 @@ def train():
                 # (batch_size, token_len, n_tones) -> (batch_size, n_tones)
                 t_pred_tone1_i = np.mean(t_pred_tone1_i, axis=1)
                 t_pred_tone2_i = np.mean(t_pred_tone2_i, axis=1)
+                # Collect logits and labels for saving test set predictions
+                all_test_logits_tone1.append(t_pred_tone1_i)
+                all_test_labels_tone1.append(t_true_tone1_i)
+                all_test_logits_tone2.append(t_pred_tone2_i)
+                all_test_labels_tone2.append(t_true_tone2_i)
                 for key_i in utils.DotDict.iter_keys(loss_i):
                     utils.DotDict.iter_setattr(loss_i, key_i, utils.DotDict.iter_getattr(loss_i, key_i).detach().cpu().numpy())
                 # Record information related to current batch.
@@ -891,6 +917,26 @@ def train():
                 loss_test[key_i] = item_i
             accuracies_test_tone1.append(accuracy_test_tone1)
             accuracies_test_tone2.append(accuracy_test_tone2)
+
+            # Concatenate all test logits and labels
+            all_test_logits_tone1 = np.concatenate(all_test_logits_tone1, axis=0)
+            all_test_labels_tone1 = np.concatenate(all_test_labels_tone1, axis=0)
+            all_test_logits_tone2 = np.concatenate(all_test_logits_tone2, axis=0)
+            all_test_labels_tone2 = np.concatenate(all_test_labels_tone2, axis=0)
+
+            # If current epoch is best for tone1, also save test set predictions from this epoch
+            if epoch_idx == best_epoch_tone1 and best_epoch_tone1 >= 0:
+                save_best_predictions(os.path.join(paths.run.train, "best_result"),
+                                     all_test_logits_tone1, all_test_labels_tone1, best_epoch_tone1, 'tone1_test')
+                msg = f"INFO: Also saved test set predictions for tone1 at best validation epoch {best_epoch_tone1}"
+                print(msg); paths.run.logger.summaries.info(msg)
+
+            # If current epoch is best for tone2, also save test set predictions from this epoch
+            if epoch_idx == best_epoch_tone2 and best_epoch_tone2 >= 0:
+                save_best_predictions(os.path.join(paths.run.train, "best_result"),
+                                     all_test_logits_tone2, all_test_labels_tone2, best_epoch_tone2, 'tone2_test')
+                msg = f"INFO: Also saved test set predictions for tone2 at best validation epoch {best_epoch_tone2}"
+                print(msg); paths.run.logger.summaries.info(msg)
 
             ## Write progress to summaries.
             # Log information related to current training epoch.

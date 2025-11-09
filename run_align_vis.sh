@@ -13,16 +13,15 @@ SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SO
 
 # Basic configuration
 SEEDS="42"                    # Random seeds (space-separated for multiple runs)
-SUBJS="011"                   # Subject IDs (space-separated for multiple subjects)
-SUBJ_IDXS="0"                 # Subject indices (must match number of subjects)
-PT_CKPT="./pretrains/duin/001/mae/model/checkpoint-399.pth"  # Pre-trained checkpoint path
+# Subject list - will loop through all subjects sequentially
+ALL_SUBJS=("001" "002" "003" "004" "005" "006" "007" "008" "009" "010" "011" "012")
 
 # Learning rate schedule
 LR_MIN=1e-5                   # Minimum learning rate (cosine annealing end)
 LR_MAX=5e-4                   # Maximum learning rate (after warmup)
 
 # Training schedule
-N_EPOCHS=500                  # Total number of training epochs
+N_EPOCHS=300                  # Total number of training epochs
 WARMUP_EPOCHS=20              # Number of warmup epochs (linear warmup)
 BATCH_SIZE=64                 # Batch size for training
 
@@ -54,28 +53,45 @@ N_HEADS=8                     # Number of attention heads
 # Change to training directory
 cd train/duin
 
-python run_align_vis.py \
-    --seeds ${SEEDS} \
-    --subjs ${SUBJS} \
-    --subj_idxs ${SUBJ_IDXS} \
-    --pt_ckpt ${PT_CKPT} \
-    --lr_min ${LR_MIN} \
-    --lr_max ${LR_MAX} \
-    --n_epochs ${N_EPOCHS} \
-    --warmup_epochs ${WARMUP_EPOCHS} \
-    --batch_size ${BATCH_SIZE} \
-    --contra_loss_scale ${CONTRA_LOSS_SCALE} \
-    --align_loss_scale ${ALIGN_LOSS_SCALE} \
-    --d_hidden ${D_HIDDEN} \
-    --align_dropout ${ALIGN_DROPOUT} \
-    --d_output ${D_OUTPUT} \
-    --attn_dropout ${ATTN_DROPOUT} \
-    --ff_dropout ${FF_DROPOUT} \
-    --contra_d_hidden ${CONTRA_D_HIDDEN} \
-    --contra_loss_mode ${CONTRA_LOSS_MODE} \
-    --n_blocks ${N_BLOCKS} \
-    --n_heads ${N_HEADS} \
-    --run_script "${SCRIPT_PATH}"
+# Loop through all subjects sequentially
+for SUBJ in "${ALL_SUBJS[@]}"; do
+    echo "========================================="
+    echo "Training visual alignment for subject ${SUBJ}..."
+    echo "========================================="
+
+    # Set subject-specific pretrained checkpoint
+    PT_CKPT="./pretrains/duin/${SUBJ}/mae/model/checkpoint-399.pth"
+
+    python run_align_vis.py \
+        --seeds ${SEEDS} \
+        --subjs ${SUBJ} \
+        --subj_idxs 0 \
+        --pt_ckpt ${PT_CKPT} \
+        --lr_min ${LR_MIN} \
+        --lr_max ${LR_MAX} \
+        --n_epochs ${N_EPOCHS} \
+        --warmup_epochs ${WARMUP_EPOCHS} \
+        --batch_size ${BATCH_SIZE} \
+        --contra_loss_scale ${CONTRA_LOSS_SCALE} \
+        --align_loss_scale ${ALIGN_LOSS_SCALE} \
+        --d_hidden ${D_HIDDEN} \
+        --align_dropout ${ALIGN_DROPOUT} \
+        --d_output ${D_OUTPUT} \
+        --attn_dropout ${ATTN_DROPOUT} \
+        --ff_dropout ${FF_DROPOUT} \
+        --contra_d_hidden ${CONTRA_D_HIDDEN} \
+        --contra_loss_mode ${CONTRA_LOSS_MODE} \
+        --n_blocks ${N_BLOCKS} \
+        --n_heads ${N_HEADS} \
+        --run_script "${SCRIPT_PATH}"
+
+    echo "Finished training subject ${SUBJ}"
+    echo ""
+done
+
+echo "========================================="
+echo "All subjects visual alignment training completed!"
+echo "========================================="
 
 ################################################################################
 # Example: Multi-seed training for statistical evaluation
