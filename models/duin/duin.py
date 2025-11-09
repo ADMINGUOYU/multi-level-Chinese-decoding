@@ -1414,6 +1414,11 @@ class duin_acoustic_cls(nn.Module):
         Calculates classification loss between tensors value and target.
         Get mean over last dimension to keep losses of different batches separate.
 
+        NOTE: For acoustic tone classification, L2 normalization can be applied to the logits
+        before computing cross-entropy loss (controlled by params.cls.use_l2_norm).
+        This helps prevent overfitting by constraining the magnitude of predictions
+        and encouraging more confident, stable predictions.
+
         Args:
             value: (batch_size, emb_len, n_tones) - Value of the object.
             target: (batch_size, emb_len, n_tones) - Target of the object.
@@ -1424,11 +1429,20 @@ class duin_acoustic_cls(nn.Module):
         """
         # Initialize `batch_size` & `emb_len` & `n_tones` from `value`.
         batch_size, emb_len, n_tones = value.shape
-        # Calculate the cross-entropy loss.
+
+        # Apply L2 normalization to logits if enabled (for overfitting prevention)
+        # This helps prevent overfitting by constraining prediction magnitudes
+        # Normalize along the last dimension (n_tones) with eps for numerical stability
+        if self.params.cls.use_l2_norm:
+            value_normalized = F.normalize(value, p=2, dim=-1, eps=1e-12)
+        else:
+            value_normalized = value
+
+        # Calculate the cross-entropy loss with (optionally normalized) logits.
         # loss - (batch_size, emb_len)
         loss = torch.reshape(F.cross_entropy(
             # Modified `cross_entropy` function arguments.
-            input=torch.reshape(value, shape=(-1, n_tones)), target=torch.reshape(target, shape=(-1, n_tones)),
+            input=torch.reshape(value_normalized, shape=(-1, n_tones)), target=torch.reshape(target, shape=(-1, n_tones)),
             # Default `cross_entropy` function arguments.
             weight=None, size_average=None, ignore_index=-100,
             reduce=None, reduction="none", label_smoothing=0.

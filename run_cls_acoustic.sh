@@ -5,6 +5,12 @@
 # This script trains the acoustic tone classification model for predicting
 # Chinese tones (tone1 and tone2) from brain signals.
 # Adjust parameters below for hyperparameter tuning experiments.
+#
+# OVERFITTING PREVENTION STRATEGY:
+# - Increased dropout rates in encoder (ATTN_DROPOUT=0.3, FF_DROPOUT="0.3,0.2")
+# - High dropout in classification head (CLS_DROPOUT=0.5)
+# - Loss normalization applied to ensure stable gradients
+# - These settings help model generalize better to unseen data
 ################################################################################
 
 # Experiment Target: test
@@ -27,17 +33,25 @@ N_EPOCHS=200                  # Total number of training epochs
 WARMUP_EPOCHS=20              # Number of warmup epochs (linear warmup)
 BATCH_SIZE=64                 # Batch size for training
 
-# Encoder dropout rates
-ATTN_DROPOUT=0.1              # Attention dropout rate
-FF_DROPOUT="0.1,0.0"          # Feedforward dropout rates (comma-separated: [layer1, layer2])
+# Encoder dropout rates (increased to prevent overfitting)
+# Higher dropout rates help model generalize better by preventing co-adaptation of features
+ATTN_DROPOUT=0.3              # Attention dropout rate (increased from 0.1 to 0.3)
+FF_DROPOUT="0.3,0.2"          # Feedforward dropout rates (increased from "0.1,0.0" to "0.3,0.2")
+                              # Format: "layer1,layer2" - applies different dropout to each FF sublayer
 
 # Encoder architecture
 N_BLOCKS=8                    # Number of transformer blocks
 N_HEADS=8                     # Number of attention heads
 
 # Classification head architecture
-D_HIDDEN="128,128"                 # Hidden layer dimensions (comma-separated, e.g., "512,256" or empty for no hidden layers)
-CLS_DROPOUT=0.2               # Dropout rate for classification head
+D_HIDDEN="128,128"            # Hidden layer dimensions (comma-separated, e.g., "512,256" or empty for no hidden layers)
+                              # Multi-layer head allows for more complex decision boundaries
+CLS_DROPOUT=0.5               # Dropout rate for classification head (increased from 0.2 to 0.5)
+                              # Higher dropout in classification head is critical for preventing overfitting
+                              # This is typically the layer most prone to memorizing training data
+USE_L2_NORM=true              # Apply L2 normalization to logits before computing loss
+                              # This constrains prediction magnitudes and helps prevent overfitting
+                              # Set to 'false' to disable (not recommended for overfitting scenarios)
 
 ################################################################################
 # Run training
@@ -62,6 +76,7 @@ python run_cls_acoustic.py \
     --n_heads ${N_HEADS} \
     --d_hidden ${D_HIDDEN} \
     --cls_dropout ${CLS_DROPOUT} \
+    --use_l2_norm ${USE_L2_NORM} \
     --run_script "${SCRIPT_PATH}"
 
 ################################################################################

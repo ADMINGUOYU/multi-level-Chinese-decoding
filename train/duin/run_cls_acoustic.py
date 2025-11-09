@@ -483,6 +483,80 @@ class FinetuneDataset(torch.utils.data.Dataset):
 """
 train funcs
 """
+# def calculate_topk_accuracy func
+def calculate_topk_accuracy(logits, labels, k_values=[1, 2, 3]):
+    """
+    Calculate top-k accuracy for given logits and labels.
+
+    Args:
+        logits: np.ndarray - (n_samples, n_classes) - Predicted logits/probabilities
+        labels: np.ndarray - (n_samples, n_classes) - One-hot encoded true labels
+        k_values: list - List of k values for top-k accuracy
+
+    Returns:
+        topk_acc: dict - Dictionary with top-k accuracies
+    """
+    # Get true class indices
+    true_classes = np.argmax(labels, axis=-1)
+
+    # Get top-k predictions
+    topk_acc = {}
+    for k in k_values:
+        # Get indices of top-k predictions
+        topk_preds = np.argsort(logits, axis=-1)[:, -k:]
+        # Check if true class is in top-k
+        correct = np.array([true_classes[i] in topk_preds[i] for i in range(len(true_classes))])
+        topk_acc[f'top{k}'] = np.mean(correct)
+
+    return topk_acc
+
+# def save_best_predictions func
+def save_best_predictions(save_path, logits, labels, epoch, tone_name):
+    """
+    Save best model predictions, labels, and top-k accuracies.
+
+    Args:
+        save_path: str - Path to save directory
+        logits: np.ndarray - (n_samples, n_classes) - Predicted logits/probabilities
+        labels: np.ndarray - (n_samples, n_classes) - One-hot encoded true labels
+        epoch: int - Best epoch number
+        tone_name: str - Name of the tone (tone1 or tone2)
+
+    Returns:
+        None
+    """
+    global paths
+
+    # Calculate top-k accuracies
+    topk_acc = calculate_topk_accuracy(logits, labels, k_values=[1, 2, 3])
+
+    # Prepare data to save
+    save_data = {
+        'logits': logits,
+        'labels': labels,
+        'probabilities': sp.special.softmax(logits, axis=-1),  # Convert logits to probabilities
+        'predictions': np.argmax(logits, axis=-1),
+        'true_labels': np.argmax(labels, axis=-1),
+        'top1_accuracy': topk_acc['top1'],
+        'top2_accuracy': topk_acc['top2'],
+        'top3_accuracy': topk_acc['top3'],
+        'best_epoch': epoch,
+        'tone_name': tone_name,
+    }
+
+    # Save to file
+    filename = os.path.join(save_path, f'best_predictions_{tone_name}.npz')
+    np.savez(filename, **save_data)
+
+    # Log the save operation
+    msg = (
+        f"INFO: Saved best {tone_name} predictions at epoch {epoch} to {filename}\n"
+        f"      Top-1 Acc: {topk_acc['top1']*100:.2f}%, "
+        f"Top-2 Acc: {topk_acc['top2']*100:.2f}%, "
+        f"Top-3 Acc: {topk_acc['top3']*100:.2f}%"
+    )
+    print(msg); paths.run.logger.summaries.info(msg)
+
 # def train func
 def train():
     """
@@ -600,6 +674,16 @@ def train():
         accuracies_validation_tone1 = []; accuracies_validation_tone2 = []
         accuracies_test_tone1 = []; accuracies_test_tone2 = []
 
+        # Initialize best model tracking for tone1 and tone2
+        best_val_acc_tone1 = 0.0
+        best_val_acc_tone2 = 0.0
+        best_epoch_tone1 = -1
+        best_epoch_tone2 = -1
+        best_logits_tone1 = None
+        best_labels_tone1 = None
+        best_logits_tone2 = None
+        best_labels_tone2 = None
+
         # Reset the iteration information of params.
         params.iteration(iteration=0)
         # Initialize model of current time segment.
@@ -670,6 +754,9 @@ def train():
 
             # Prepare for model validation process.
             accuracy_validation_tone1 = []; accuracy_validation_tone2 = []; loss_validation = utils.DotDict()
+            # Collect all validation predictions and labels for best model saving
+            all_val_logits_tone1 = []; all_val_labels_tone1 = []
+            all_val_logits_tone2 = []; all_val_labels_tone2 = []
             # Execute validation process.
             for validation_batch in dataset_validation:
                 # Initialize `batch_i` from `validation_batch`.
@@ -690,6 +777,11 @@ def train():
                 # (batch_size, token_len, n_tones) -> (batch_size, n_tones)
                 t_pred_tone1_i = np.mean(t_pred_tone1_i, axis=1)
                 t_pred_tone2_i = np.mean(t_pred_tone2_i, axis=1)
+                # Collect logits and labels for best model saving
+                all_val_logits_tone1.append(t_pred_tone1_i)
+                all_val_labels_tone1.append(t_true_tone1_i)
+                all_val_logits_tone2.append(t_pred_tone2_i)
+                all_val_labels_tone2.append(t_true_tone2_i)
                 for key_i in utils.DotDict.iter_keys(loss_i):
                     utils.DotDict.iter_setattr(loss_i, key_i, utils.DotDict.iter_getattr(loss_i, key_i).detach().cpu().numpy())
                 # Record information related to current batch.
@@ -720,6 +812,32 @@ def train():
                 loss_validation[key_i] = item_i
             accuracies_validation_tone1.append(accuracy_validation_tone1)
             accuracies_validation_tone2.append(accuracy_validation_tone2)
+
+            # Concatenate all validation logits and labels
+            all_val_logits_tone1 = np.concatenate(all_val_logits_tone1, axis=0)
+            all_val_labels_tone1 = np.concatenate(all_val_labels_tone1, axis=0)
+            all_val_logits_tone2 = np.concatenate(all_val_logits_tone2, axis=0)
+            all_val_labels_tone2 = np.concatenate(all_val_labels_tone2, axis=0)
+
+            # Check if this is the best epoch for tone1 and save if so
+            current_val_acc_tone1 = np.mean(accuracy_validation_tone1)
+            if current_val_acc_tone1 > best_val_acc_tone1:
+                best_val_acc_tone1 = current_val_acc_tone1
+                best_epoch_tone1 = epoch_idx
+                best_logits_tone1 = all_val_logits_tone1.copy()
+                best_labels_tone1 = all_val_labels_tone1.copy()
+                # Save best predictions for tone1 to train directory
+                save_best_predictions(paths.run.train, best_logits_tone1, best_labels_tone1, best_epoch_tone1, 'tone1')
+
+            # Check if this is the best epoch for tone2 and save if so
+            current_val_acc_tone2 = np.mean(accuracy_validation_tone2)
+            if current_val_acc_tone2 > best_val_acc_tone2:
+                best_val_acc_tone2 = current_val_acc_tone2
+                best_epoch_tone2 = epoch_idx
+                best_logits_tone2 = all_val_logits_tone2.copy()
+                best_labels_tone2 = all_val_labels_tone2.copy()
+                # Save best predictions for tone2 to train directory
+                save_best_predictions(paths.run.train, best_logits_tone2, best_labels_tone2, best_epoch_tone2, 'tone2')
 
             # Prepare for model test process.
             accuracy_test_tone1 = []; accuracy_test_tone2 = []; loss_test = utils.DotDict()
@@ -876,6 +994,29 @@ def train():
             np.argmax(accuracies_test_avg[subj_idx,epoch_maxacc_idxs[subj_idx]])
         ] for subj_idx in range(len(epoch_maxacc_idxs))]
 
+        # Log best epoch information for both tones
+        msg = (
+            "INFO: Best validation epochs - Tone1: epoch {:d} (val_acc: {:.2f}%), Tone2: epoch {:d} (val_acc: {:.2f}%)"
+        ).format(best_epoch_tone1, best_val_acc_tone1 * 100., best_epoch_tone2, best_val_acc_tone2 * 100.)
+        print(msg); paths.run.logger.summaries.info(msg)
+
+        # Calculate and log top-k accuracies for best models
+        if best_logits_tone1 is not None:
+            topk_acc_tone1 = calculate_topk_accuracy(best_logits_tone1, best_labels_tone1, k_values=[1, 2, 3])
+            msg = (
+                "INFO: Best Tone1 Top-k Accuracies - "
+                "Top-1: {:.2f}%, Top-2: {:.2f}%, Top-3: {:.2f}%"
+            ).format(topk_acc_tone1['top1'] * 100., topk_acc_tone1['top2'] * 100., topk_acc_tone1['top3'] * 100.)
+            print(msg); paths.run.logger.summaries.info(msg)
+
+        if best_logits_tone2 is not None:
+            topk_acc_tone2 = calculate_topk_accuracy(best_logits_tone2, best_labels_tone2, k_values=[1, 2, 3])
+            msg = (
+                "INFO: Best Tone2 Top-k Accuracies - "
+                "Top-1: {:.2f}%, Top-2: {:.2f}%, Top-3: {:.2f}%"
+            ).format(topk_acc_tone2['top1'] * 100., topk_acc_tone2['top2'] * 100., topk_acc_tone2['top3'] * 100.)
+            print(msg); paths.run.logger.summaries.info(msg)
+
         # Finish training process of current specified experiment.
         msg = (
             "Finish the training process of experiment {}."
@@ -985,6 +1126,7 @@ def get_args_parser():
     # Classification head parameters
     parser.add_argument("--d_hidden", type=str, default="", help="Hidden dimensions for classification head, comma-separated (default: '' - no hidden layers)")
     parser.add_argument("--cls_dropout", type=float, default=0.5, help="Dropout rate for classification head (default: 0.5)")
+    parser.add_argument("--use_l2_norm", type=lambda x: x.lower() == 'true', default=True, help="Apply L2 normalization to logits for overfitting prevention (default: True)")
 
     # Shell script path for saving configuration
     parser.add_argument("--run_script", type=str, default=None, help="Path to the shell script used to launch training (will be saved to summaries folder)")
@@ -1029,6 +1171,7 @@ if __name__ == "__main__":
         d_hidden_list = [int(x) for x in args.d_hidden.split(",")]
         duin_params_inst.model.cls.d_hidden = d_hidden_list
     duin_params_inst.model.cls.dropout = args.cls_dropout
+    duin_params_inst.model.cls.use_l2_norm = args.use_l2_norm
 
     # Initialize the training process.
     init(duin_params_inst)
@@ -1036,8 +1179,8 @@ if __name__ == "__main__":
     # Save the run script to summaries folder if provided
     if args.run_script is not None and os.path.exists(args.run_script):
         try:
-            shutil.copy(args.run_script, os.path.join(paths.run.save, "run_script.sh"))
-            print(f"[INFO] Saved run script to {os.path.join(paths.run.save, 'run_script.sh')}")
+            shutil.copy(args.run_script, os.path.join(paths.run.script, "run_script.sh"))
+            print(f"[INFO] Saved run script to {os.path.join(paths.run.script, 'run_script.sh')}")
         except Exception as e:
             print(f"[WARNING] Failed to save run script: {e}")
 

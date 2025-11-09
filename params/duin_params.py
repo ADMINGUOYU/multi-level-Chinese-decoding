@@ -1366,6 +1366,8 @@ class duin_acoustic_cls_params(duin_params):
         # The number of tone classes (5 tones in Mandarin: tone1, tone2, tone3, tone4, neutral)
         self.model.cls.n_tone1 = 5
         self.model.cls.n_tone2 = 5
+        # Whether to apply L2 normalization to logits before computing loss (for overfitting prevention)
+        self.model.cls.use_l2_norm = True
 
     ## def _update_train_* funcs
     # def _update_train_params func
