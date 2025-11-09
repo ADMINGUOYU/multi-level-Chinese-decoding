@@ -23,10 +23,10 @@ def load_npz_acoustic(path):
     return data["chars"], data["embeddings"]
 
 
-
-chars,emb = load_npz_acoustic('GT_embeddings/Duin_Acoustic_label.npz')
-# chars,emb = load_npz_semantic('GT_embeddings/Duin_Semantic_GT_bert.npz')
-# chars,emb = load_npz_vis('GT_embeddings/Duin_Visual_GT_VitPerchar.npz')
-print(chars)
-print(emb[0])
-print(emb[0].shape)
+if __name__ == "__main__":
+    chars,emb = load_npz_acoustic('GT_embeddings/Duin_Acoustic_label.npz')
+    # chars,emb = load_npz_semantic('GT_embeddings/Duin_Semantic_GT_bert.npz')
+    # chars,emb = load_npz_vis('GT_embeddings/Duin_Visual_GT_VitPerchar.npz')
+    print(chars)
+    print(emb)
+    # print(emb[0].shape)

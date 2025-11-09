@@ -6,14 +6,14 @@
 # Adjust parameters below for hyperparameter tuning experiments.
 ################################################################################
 
-
+# Experiment Target: try to train on sub11
 
 # Get the absolute path of this script (MUST be before changing directory)
 SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 
 # Basic configuration
 SEEDS="42"                    # Random seeds (space-separated for multiple runs)
-SUBJS="001"                   # Subject IDs (space-separated for multiple subjects)
+SUBJS="011"                   # Subject IDs (space-separated for multiple subjects)
 SUBJ_IDXS="0"                 # Subject indices (must match number of subjects)
 PT_CKPT="./pretrains/duin/001/mae/model/checkpoint-399.pth"  # Pre-trained checkpoint path
 
@@ -22,7 +22,7 @@ LR_MIN=1e-5                   # Minimum learning rate (cosine annealing end)
 LR_MAX=5e-4                   # Maximum learning rate (after warmup)
 
 # Training schedule
-N_EPOCHS=300                  # Total number of training epochs
+N_EPOCHS=500                  # Total number of training epochs
 WARMUP_EPOCHS=20              # Number of warmup epochs (linear warmup)
 BATCH_SIZE=64                 # Batch size for training
 

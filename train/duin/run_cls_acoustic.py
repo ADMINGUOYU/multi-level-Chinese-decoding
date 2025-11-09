@@ -28,6 +28,12 @@ __all__ = [
     "train",
 ]
 
+# GPU DEBUGGING: Disable cuDNN to test if it causes GPU training failure
+import torch.backends.cudnn as cudnn
+cudnn.enabled = False
+cudnn.benchmark = False
+cudnn.deterministic = True
+
 # Global variables.
 params = None; paths = None
 model = None; optimizer = None
@@ -626,8 +632,13 @@ def train():
                 # Train model for current batch.
                 t_pred_i, loss_i = _train(batch_i)
                 # Numpy the outputs of current batch.
+                # t_pred_*_i: (batch_size, token_len, n_tones), t_true_*_i: (batch_size, n_tones)
                 t_pred_tone1_i = t_pred_i[0].detach().cpu().numpy(); t_true_tone1_i = batch_i[1][0].detach().cpu().numpy()
                 t_pred_tone2_i = t_pred_i[1].detach().cpu().numpy(); t_true_tone2_i = batch_i[1][1].detach().cpu().numpy()
+                # Aggregate per-token predictions by averaging across token dimension
+                # (batch_size, token_len, n_tones) -> (batch_size, n_tones)
+                t_pred_tone1_i = np.mean(t_pred_tone1_i, axis=1)
+                t_pred_tone2_i = np.mean(t_pred_tone2_i, axis=1)
                 for key_i in utils.DotDict.iter_keys(loss_i):
                     utils.DotDict.iter_setattr(loss_i, key_i, utils.DotDict.iter_getattr(loss_i, key_i).detach().cpu().numpy())
                 # Record information related to current batch.
@@ -672,8 +683,13 @@ def train():
                 # Validate model for current batch.
                 t_pred_i, loss_i = _forward(batch_i)
                 # Numpy the outputs of current batch.
+                # t_pred_*_i: (batch_size, token_len, n_tones), t_true_*_i: (batch_size, n_tones)
                 t_pred_tone1_i = t_pred_i[0].detach().cpu().numpy(); t_true_tone1_i = batch_i[1][0].detach().cpu().numpy()
                 t_pred_tone2_i = t_pred_i[1].detach().cpu().numpy(); t_true_tone2_i = batch_i[1][1].detach().cpu().numpy()
+                # Aggregate per-token predictions by averaging across token dimension
+                # (batch_size, token_len, n_tones) -> (batch_size, n_tones)
+                t_pred_tone1_i = np.mean(t_pred_tone1_i, axis=1)
+                t_pred_tone2_i = np.mean(t_pred_tone2_i, axis=1)
                 for key_i in utils.DotDict.iter_keys(loss_i):
                     utils.DotDict.iter_setattr(loss_i, key_i, utils.DotDict.iter_getattr(loss_i, key_i).detach().cpu().numpy())
                 # Record information related to current batch.
@@ -720,8 +736,13 @@ def train():
                 # Test model for current batch.
                 t_pred_i, loss_i = _forward(batch_i)
                 # Numpy the outputs of current batch.
+                # t_pred_*_i: (batch_size, token_len, n_tones), t_true_*_i: (batch_size, n_tones)
                 t_pred_tone1_i = t_pred_i[0].detach().cpu().numpy(); t_true_tone1_i = batch_i[1][0].detach().cpu().numpy()
                 t_pred_tone2_i = t_pred_i[1].detach().cpu().numpy(); t_true_tone2_i = batch_i[1][1].detach().cpu().numpy()
+                # Aggregate per-token predictions by averaging across token dimension
+                # (batch_size, token_len, n_tones) -> (batch_size, n_tones)
+                t_pred_tone1_i = np.mean(t_pred_tone1_i, axis=1)
+                t_pred_tone2_i = np.mean(t_pred_tone2_i, axis=1)
                 for key_i in utils.DotDict.iter_keys(loss_i):
                     utils.DotDict.iter_setattr(loss_i, key_i, utils.DotDict.iter_getattr(loss_i, key_i).detach().cpu().numpy())
                 # Record information related to current batch.
@@ -937,16 +958,42 @@ def get_args_parser():
     """
     # Initialize parser.
     parser = argparse.ArgumentParser("DuIN Acoustic Tone CLS for brain signals", add_help=False)
-    # Add training parmaeters.
+
+    # Basic training parameters
     parser.add_argument("--seeds", type=int, nargs="+", default=[42,])
     parser.add_argument("--subjs", type=str, nargs="+", default=["001",])
     parser.add_argument("--subj_idxs", type=int, nargs="+", default=[0,])
     parser.add_argument("--pt_ckpt", type=str, default=None)
+
+    # Learning rate schedule
+    parser.add_argument("--lr_min", type=float, default=1e-5, help="Minimum learning rate (default: 1e-5)")
+    parser.add_argument("--lr_max", type=float, default=5e-4, help="Maximum learning rate (default: 5e-4)")
+
+    # Training schedule
+    parser.add_argument("--n_epochs", type=int, default=200, help="Number of training epochs (default: 200)")
+    parser.add_argument("--warmup_epochs", type=int, default=20, help="Number of warmup epochs (default: 20)")
+    parser.add_argument("--batch_size", type=int, default=64, help="Batch size (default: 64)")
+
+    # Encoder dropout rates
+    parser.add_argument("--attn_dropout", type=float, default=0.1, help="Attention dropout rate (default: 0.1)")
+    parser.add_argument("--ff_dropout", type=str, default="0.1,0.0", help="Feedforward dropout rates, comma-separated (default: '0.1,0.0')")
+
+    # Encoder architecture
+    parser.add_argument("--n_blocks", type=int, default=8, help="Number of transformer blocks (default: 8)")
+    parser.add_argument("--n_heads", type=int, default=8, help="Number of attention heads (default: 8)")
+
+    # Classification head parameters
+    parser.add_argument("--d_hidden", type=str, default="", help="Hidden dimensions for classification head, comma-separated (default: '' - no hidden layers)")
+    parser.add_argument("--cls_dropout", type=float, default=0.5, help="Dropout rate for classification head (default: 0.5)")
+
+    # Shell script path for saving configuration
+    parser.add_argument("--run_script", type=str, default=None, help="Path to the shell script used to launch training (will be saved to summaries folder)")
+
     # Return the final `parser`.
     return parser
 
 if __name__ == "__main__":
-    import os
+    import os, shutil
     # local dep
     from params.duin_params import duin_acoustic_cls_params as duin_params
 
@@ -961,8 +1008,39 @@ if __name__ == "__main__":
     duin_params_inst = duin_params(dataset=dataset)
     duin_params_inst.train.base = base; duin_params_inst.train.subjs = args.subjs
     duin_params_inst.train.subj_idxs = args.subj_idxs; duin_params_inst.train.pt_ckpt = args.pt_ckpt
+
+    # Apply hyperparameters from command line arguments
+    # Learning rate schedule
+    duin_params_inst.train.lr_min = args.lr_min
+    duin_params_inst.train.lr_max = args.lr_max
+    # Training schedule
+    duin_params_inst.train.n_epochs = args.n_epochs
+    duin_params_inst.train.warmup_epochs = args.warmup_epochs
+    duin_params_inst.train.batch_size = args.batch_size
+    # Encoder dropout rates
+    duin_params_inst.model.encoder.attn_dropout = args.attn_dropout
+    ff_dropout_list = [float(x) for x in args.ff_dropout.split(",")]
+    duin_params_inst.model.encoder.ff_dropout = ff_dropout_list
+    # Encoder architecture
+    duin_params_inst.model.encoder.n_blocks = args.n_blocks
+    duin_params_inst.model.encoder.n_heads = args.n_heads
+    # Classification head parameters
+    if args.d_hidden:
+        d_hidden_list = [int(x) for x in args.d_hidden.split(",")]
+        duin_params_inst.model.cls.d_hidden = d_hidden_list
+    duin_params_inst.model.cls.dropout = args.cls_dropout
+
     # Initialize the training process.
     init(duin_params_inst)
+
+    # Save the run script to summaries folder if provided
+    if args.run_script is not None and os.path.exists(args.run_script):
+        try:
+            shutil.copy(args.run_script, os.path.join(paths.run.save, "run_script.sh"))
+            print(f"[INFO] Saved run script to {os.path.join(paths.run.save, 'run_script.sh')}")
+        except Exception as e:
+            print(f"[WARNING] Failed to save run script: {e}")
+
     # Loop the training process over random seeds.
     for seed_i in args.seeds:
         # Initialize random seed, then train duin.

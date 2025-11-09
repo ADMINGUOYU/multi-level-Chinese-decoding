@@ -24,6 +24,7 @@ __all__ = [
     "duin_cls",
     "duin_align",
     "duin_llm",
+    "duin_acoustic_cls",
 ]
 
 # def duin_vqvae class
@@ -1378,11 +1379,15 @@ class duin_acoustic_cls(nn.Module):
         # Forward classification block to get the prediction tones.
         # t_pred - (2[list], batch_size, token_len, n_tones)
         t_pred = [self.cls_blocks[tone_idx](E) for tone_idx in range(len(self.cls_blocks))]
+        # Expand t_true from (batch_size, n_tones) to (batch_size, token_len, n_tones)
+        # by repeating across the token dimension for per-token supervision
+        token_len = t_pred[0].shape[1]
+        t_true_expanded = [t_true_i.unsqueeze(1).expand(-1, token_len, -1) for t_true_i in t_true]
         # Calculate the classification loss.
         # loss_cls - torch.float32
         weight = token_mask.to(dtype=t_pred[0].dtype)
-        loss_cls_list = [self._loss_cls(t_pred_i, t_true_i, weight=weight)\
-            for t_pred_i, t_true_i in zip(t_pred, t_true)]
+        loss_cls_list = [self._loss_cls(t_pred_i, t_true_expanded_i, weight=weight)\
+            for t_pred_i, t_true_expanded_i in zip(t_pred, t_true_expanded)]
         loss_cls = torch.mean(torch.stack(loss_cls_list, dim=0))
         # Calculate the total loss.
         # loss_total - torch.float32
