@@ -78,6 +78,14 @@ def init(params_):   # 不变
     os.makedirs(paths.run.save_embeddings, exist_ok=True)
     print(f"[INFO] Embeddings directory created at: {paths.run.save_embeddings}")
 
+    # --- Save training metadata file ---
+    training_info_path = os.path.join(paths.run.train, "training_info.txt")
+    subj_i = params.train.subjs[0]  # Get the first (and only) subject from the list
+    with open(training_info_path, "w") as f:
+        f.write(f"Training Type: align_visual\n")
+        f.write(f"Subject Number: {subj_i}\n")
+    print(f"[INFO] Training metadata saved to: {training_info_path}")
+
     # --- Save shell script if provided ---
     if hasattr(params.train, 'run_script') and params.train.run_script is not None:
         import shutil

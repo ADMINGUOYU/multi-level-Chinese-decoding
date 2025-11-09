@@ -699,6 +699,13 @@ def train():
         os.makedirs(os.path.join(paths.run.train, "ckpt"), exist_ok=True)
         os.makedirs(os.path.join(paths.run.train, "best_result"), exist_ok=True)
 
+        # Save training metadata file
+        training_info_path = os.path.join(paths.run.train, "training_info.txt")
+        with open(training_info_path, "w") as f:
+            f.write(f"Training Type: acoustic_cls\n")
+            f.write(f"Subject Number: {subj_i}\n")
+        print(f"[INFO] Training metadata saved to: {training_info_path}")
+
         for epoch_idx in range(params.train.n_epochs):
             # Update params according to `epoch_idx`, then update optimizer.lr.
             params.iteration(iteration=epoch_idx)

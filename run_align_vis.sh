@@ -6,7 +6,7 @@
 # Adjust parameters below for hyperparameter tuning experiments.
 ################################################################################
 
-# Experiment Target: try to train on sub11
+# Experiment Target: run in all subjects
 
 # Get the absolute path of this script (MUST be before changing directory)
 SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
@@ -23,7 +23,7 @@ LR_MAX=5e-4                   # Maximum learning rate (after warmup)
 # Training schedule
 N_EPOCHS=300                  # Total number of training epochs
 WARMUP_EPOCHS=20              # Number of warmup epochs (linear warmup)
-BATCH_SIZE=64                 # Batch size for training
+BATCH_SIZE=32                 # Batch size for training
 
 # Loss scales (adjust to balance multi-task objectives)
 CONTRA_LOSS_SCALE=0.5         # Contrastive loss scale (should be relatively small)

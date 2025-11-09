@@ -13,7 +13,7 @@
 # - These settings help model generalize better to unseen data
 ################################################################################
 
-# Experiment Target: test
+# Experiment Target: run in all subjects
 
 # Get the absolute path of this script (MUST be before changing directory)
 SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
@@ -30,7 +30,7 @@ LR_MAX=5e-4                   # Maximum learning rate (after warmup)
 # Training schedule
 N_EPOCHS=200                  # Total number of training epochs
 WARMUP_EPOCHS=20              # Number of warmup epochs (linear warmup)
-BATCH_SIZE=64                 # Batch size for training
+BATCH_SIZE=32                 # Batch size for training
 
 # Encoder dropout rates (increased to prevent overfitting)
 # Higher dropout rates help model generalize better by preventing co-adaptation of features
