@@ -703,7 +703,7 @@ def train():
         training_info_path = os.path.join(paths.run.train, "training_info.txt")
         with open(training_info_path, "w") as f:
             f.write(f"Training Type: acoustic_cls\n")
-            f.write(f"Subject Number: {subj_i}\n")
+            f.write(f"Subject Number: {params.train.subjs}\n")
         print(f"[INFO] Training metadata saved to: {training_info_path}")
 
         for epoch_idx in range(params.train.n_epochs):
