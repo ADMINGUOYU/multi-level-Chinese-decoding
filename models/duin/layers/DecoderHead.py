@@ -663,17 +663,38 @@ class TokenCLSHead(nn.Module):
     network funcs
     """
     # def forward func
-    def forward(self, emb):
+    def forward(self, emb, return_features=False):
         """
         Forward layers in `TokenCLSHead` to get the predicted tokens.
 
         Args:
             emb: (batch_size, emb_len, d_model) - The encoder-transformed embedding sequence.
+            return_features: bool - If True, return intermediate features before final classification layer.
 
         Returns:
-            c_pred: (batch_size, emb_len, n_tokens) - The predicted tokens.
+            If return_features=False:
+                c_pred: (batch_size, emb_len, n_tokens) - The predicted tokens.
+            If return_features=True:
+                (features, c_pred): tuple
+                    features: (batch_size, d_feature) - Global average pooled features from last hidden layer.
+                    c_pred: (batch_size, emb_len, n_tokens) - The predicted tokens.
         """
-        return self.cls_head(emb)
+        if return_features:
+            # Pass through all layers except the final classification layer
+            x = emb
+            for layer in self.cls_head[:-1]:
+                x = layer(x)
+            # x shape: (batch_size, emb_len, d_hidden[-1] or d_model)
+
+            # Apply global average pooling across token dimension to get sentence-level features
+            features = torch.mean(x, dim=1)  # (batch_size, d_hidden[-1] or d_model)
+
+            # Pass through final classification layer to get logits
+            c_pred = self.cls_head[-1](x)  # (batch_size, emb_len, n_tokens)
+
+            return features, c_pred
+        else:
+            return self.cls_head(emb)
 
 # def LLMCLSHead class
 class LLMCLSHead(nn.Module):

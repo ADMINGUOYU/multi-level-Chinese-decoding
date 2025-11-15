@@ -145,6 +145,30 @@ def _load_subj_bipolar(path_run_datasets, ch_names=None):
 
         # Update `X_*` & `y`.
         X_s.append(X_s_i); X_n.append(X_n_i); y.append(y_i)
+    # Check if any data was loaded
+    if len(X_s) == 0:
+        error_msg = (
+            f"ERROR: No data loaded for subject {subj}.\n"
+            f"Checked {len(path_run_datasets)} run directories:\n"
+        )
+        for path in path_run_datasets:
+            data_path = os.path.join(path, "data")
+            info_path = os.path.join(path, "info")
+            data_exists = os.path.exists(data_path)
+            info_exists = os.path.exists(info_path)
+            # Check if symlink
+            data_is_link = os.path.islink(data_path) if os.path.lexists(data_path) else False
+            error_msg += f"  - {path}\n"
+            error_msg += f"    data exists: {data_exists} (symlink: {data_is_link})\n"
+            error_msg += f"    info exists: {info_exists}\n"
+        error_msg += "\nPossible causes:\n"
+        error_msg += "1. Dataset not downloaded from HuggingFace yet\n"
+        error_msg += "2. Broken symbolic links to HuggingFace cache\n"
+        error_msg += "3. Wrong data directory path\n"
+        error_msg += "\nPlease download the dataset from:\n"
+        error_msg += "https://huggingface.co/datasets/liulab-repository/Du-IN\n"
+        raise ValueError(error_msg)
+
     # Get the final `X_*` & `y`.
     # X_* - (n_samples, seq_len, n_channels); y - (n_samples,)
     X_s = np.concatenate(X_s, axis=0); X_n = np.concatenate(X_n, axis=0); y = np.concatenate(y, axis=0)

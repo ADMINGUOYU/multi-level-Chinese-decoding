@@ -25,6 +25,8 @@ __all__ = [
     "duin_align",
     "duin_llm",
     "duin_acoustic_cls",
+    "duin_multitask",
+    "duin_fusion_cls",
 ]
 
 # def duin_vqvae class
@@ -1469,6 +1471,705 @@ class duin_acoustic_cls(nn.Module):
             ch_weights: (n_subjects, n_channels) - The contribution weights of each input channel.
         """
         return self.subj_block.get_weight_i()
+
+# def duin_multitask class
+class duin_multitask(nn.Module):
+    """
+    DuIN multi-task learning model combining semantic, visual, and acoustic alignment tasks.
+    Shares encoder across all three tasks with task-specific heads.
+    """
+
+    def __init__(self, params, **kwargs):
+        """
+        Initialize `duin_multitask` object.
+
+        Args:
+            params: DotDict - Model parameters initialized by duin_multitask_params, updated by params.iteration.
+            kwargs: dict - The arguments related to initialize `nn.Module`-style object.
+
+        Returns:
+            None
+        """
+        super(duin_multitask, self).__init__(**kwargs)
+
+        # Initialize parameters.
+        self.params = cp.deepcopy(params)
+
+        # Initialize variables.
+        self._init_model(); self._init_weight()
+
+    """
+    init funcs
+    """
+    # def _init_model func
+    def _init_model(self):
+        """
+        Initialize model architecture.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        # Initialize shared encoder components
+        # subj_block - (batch_size, seq_len, n_channels) -> (batch_size, seq_len, d_neural)
+        self.subj_block = SubjectBlock(params=self.params.subj)
+        # tokenizer - (batch_size, seq_len, d_neural) -> (batch_size, token_len, d_model)
+        self.tokenizer = PatchTokenizer(params=self.params.tokenizer)
+        # emb_time - (batch_size, token_len, d_model) -> (batch_size, token_len, d_model)
+        assert (self.params.encoder.rot_theta is None)
+        self.emb_time = TimeEmbedding(d_model=self.params.encoder.d_model, max_len=self.params.encoder.emb_len, mode="sincos")
+        # encoder - (batch_size, emb_len, d_model) -> (batch_size, emb_len, d_model)
+        self.encoder = nn.Sequential(
+            LambdaLayer(func=(lambda x: self.emb_time(x))),
+            TransformerStack(self.params.encoder), LambdaLayer(func=(lambda x: x[0])),
+        )
+
+        # Initialize VQ block (used for contrastive learning in alignment tasks)
+        # vq_block - (batch_size, emb_len, d_model) -> (batch_size, emb_len, d_model)
+        self.vq_block = LaBraMVectorQuantizer(
+            d_model=self.params.vq.d_model, codex_size=self.params.vq.codex_size, d_codex=self.params.vq.d_codex,
+            beta=self.params.vq.beta, decay=self.params.vq.decay, init_kmeans=self.params.vq.init_kmeans
+        )
+
+        # Initialize contrastive block (shared by alignment tasks)
+        self.contra_block = ContrastiveBlock(d_model=self.params.contra.d_model,
+            d_contra=self.params.contra.d_contra, loss_mode=self.params.contra.loss_mode)
+
+        # Initialize task-specific heads
+        # 1. Semantic alignment head - (batch_size, emb_len, d_model) -> (batch_size, 768)
+        self.semantic_head = AlignHead(params=self.params.semantic_align)
+
+        # 2. Visual alignment head - (batch_size, emb_len, d_model) -> (batch_size, 768)
+        self.visual_head = AlignHead(params=self.params.visual_align)
+
+        # 3. Acoustic classification heads - (batch_size, emb_len, d_model) -> (batch_size, emb_len, n_tones)
+        cls_tone1_params = cp.deepcopy(self.params.acoustic_cls); cls_tone1_params.n_tokens = cls_tone1_params.n_tone1
+        cls_tone2_params = cp.deepcopy(self.params.acoustic_cls); cls_tone2_params.n_tokens = cls_tone2_params.n_tone2
+        self.acoustic_heads = nn.ModuleList(modules=[
+            TokenCLSHead(params=cls_tone1_params),
+            TokenCLSHead(params=cls_tone2_params),
+        ])
+
+        # Initialize learnable task weights for uncertainty-based multi-task learning (optional)
+        if self.params.use_uncertainty_weighting:
+            # Log-variance parameters for automatic task balancing (Kendall et al., 2018)
+            self.log_var_semantic = nn.Parameter(torch.zeros(1))
+            self.log_var_visual = nn.Parameter(torch.zeros(1))
+            self.log_var_acoustic = nn.Parameter(torch.zeros(1))
+
+    # def _init_weight func
+    def _init_weight(self):
+        """
+        Initialize model weights.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        pass
+
+    """
+    load funcs
+    """
+    # def load_weight func
+    def load_weight(self, path_ckpt):
+        """
+        Load model weights from the specified checkpoint path.
+
+        Args:
+            path_ckpt: str - The path of the specified checkpoint.
+
+        Returns:
+            None
+        """
+        # Initialize `ckpt_dict`.
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        ckpt_dict = torch.load(path_ckpt, map_location=device)
+
+        # Construct `model_dict` according to `ckpt_dict`.
+        model_dict = {}; module_map = {
+            "([^.]*\.)*subj_block": "subj_block",
+            "([^.]*\.)*tokenizer": "tokenizer",
+            "([^.]*\.)*encoder": "encoder",
+        }
+        for parameter_name_i in ckpt_dict.keys():
+            for module_src_i, module_trg_i in module_map.items():
+                if re.compile(module_src_i).match(parameter_name_i) is not None:
+                    parameter_rename_i = re.sub(module_src_i, module_trg_i, parameter_name_i)
+                    model_dict[parameter_rename_i] = ckpt_dict[parameter_name_i]; break
+        for key_i in model_dict.keys():
+            assert key_i in self.state_dict().keys()
+        assert len(model_dict.keys()) > 0; self.load_state_dict(model_dict, strict=False)
+        # Log information related to parameter load.
+        modules = sorted(set([key_i.split(".")[0] for key_i in model_dict.keys()]))
+        print((
+            "INFO: Complete loading pretrained weights of modules ({}) from checkpoint ({}) in models.duin.duin_multitask."
+        ).format(modules, path_ckpt))
+
+    """
+    network funcs
+    """
+    # def forward func
+    def forward(self, inputs):
+        """
+        Forward `duin_multitask` to get predictions and losses for all three tasks.
+
+        Args:
+            inputs: tuple - The input data [X, targets_dict, subj_id, token_mask]
+                X: (batch_size, seq_len, n_channels) - Brain signals
+                targets_dict: dict - Ground-truth targets for each task
+                    'semantic': (batch_size, 768) - Semantic BERT embeddings
+                    'visual': (batch_size, 768) - Visual ViT embeddings
+                    'acoustic': (2[list], batch_size, n_tones) - Acoustic tone labels
+                subj_id: (batch_size, n_subjects) - Subject IDs
+                token_mask: (batch_size, token_len) - Token mask for acoustic task
+
+        Returns:
+            outputs: dict - Predictions for each task
+            loss: DotDict - Individual and total losses
+        """
+        # Initialize components of inputs
+        X = inputs[0]
+        targets_dict = inputs[1]
+        subj_id = inputs[2]
+        token_mask = inputs[3] if len(inputs) > 3 else None
+
+        # ===== Shared encoder forward =====
+        # Forward subject block to get subject-transformed signals
+        # X_h - (batch_size, seq_len, d_neural)
+        X_h = self.subj_block((X, subj_id))
+
+        # Forward tokenizer to get tokenized tokens
+        # T - (batch_size, token_len, d_model)
+        T = self.tokenizer(X_h); token_shape = T.shape
+
+        # Reshape tokens to get init embedding
+        # E - (batch_size, emb_len, d_model)
+        E = torch.reshape(T, shape=(token_shape[0], -1, token_shape[-1]))
+
+        # Forward encoder block to get time-aligned token sequence
+        E = self.encoder(E)
+
+        # ===== Task-specific forward =====
+        outputs = {}
+        losses = {}
+
+        # ----- Semantic Alignment Task -----
+        if 'semantic' in targets_dict:
+            Y_semantic = targets_dict['semantic']
+
+            # Forward semantic alignment head
+            Z_semantic = self.semantic_head(E)  # (batch_size, 768)
+
+            # L2 normalization
+            Z_semantic_norm = F.normalize(Z_semantic, p=2, dim=-1)
+            Y_semantic_norm = F.normalize(Y_semantic, p=2, dim=-1)
+
+            # Contrastive loss on encoder embeddings
+            E_vq, loss_vq, _ = self.vq_block(E)
+            E_norm = F.normalize(E, p=2, dim=-1)
+            loss_contra_semantic, _ = self.contra_block(((E_norm, E_norm), (Y_semantic_norm, Y_semantic_norm)))
+
+            # Alignment loss
+            loss_align_semantic = self._loss_align(Z_semantic_norm, Y_semantic_norm)
+
+            # Total semantic loss
+            loss_semantic = (
+                self.params.semantic_align_loss_scale * loss_align_semantic +
+                self.params.semantic_contra_loss_scale * loss_contra_semantic
+            )
+
+            outputs['semantic'] = Z_semantic_norm
+            losses['semantic_align'] = loss_align_semantic
+            losses['semantic_contra'] = loss_contra_semantic
+            losses['semantic'] = loss_semantic
+
+        # ----- Visual Alignment Task -----
+        if 'visual' in targets_dict:
+            Y_visual = targets_dict['visual']
+
+            # Forward visual alignment head
+            Z_visual = self.visual_head(E)  # (batch_size, 768)
+
+            # L2 normalization
+            Z_visual_norm = F.normalize(Z_visual, p=2, dim=-1)
+            Y_visual_norm = F.normalize(Y_visual, p=2, dim=-1)
+
+            # Contrastive loss on encoder embeddings
+            if 'semantic' not in targets_dict:  # Only compute VQ once
+                E_vq, loss_vq, _ = self.vq_block(E)
+            E_norm = F.normalize(E, p=2, dim=-1)
+            loss_contra_visual, _ = self.contra_block(((E_norm, E_norm), (Y_visual_norm, Y_visual_norm)))
+
+            # Alignment loss
+            loss_align_visual = self._loss_align(Z_visual_norm, Y_visual_norm)
+
+            # Total visual loss
+            loss_visual = (
+                self.params.visual_align_loss_scale * loss_align_visual +
+                self.params.visual_contra_loss_scale * loss_contra_visual
+            )
+
+            outputs['visual'] = Z_visual_norm
+            losses['visual_align'] = loss_align_visual
+            losses['visual_contra'] = loss_contra_visual
+            losses['visual'] = loss_visual
+
+        # ----- Acoustic Classification Task -----
+        if 'acoustic' in targets_dict:
+            t_true = targets_dict['acoustic']  # (2[list], batch_size, n_tones)
+
+            # Forward acoustic classification heads
+            t_pred = [self.acoustic_heads[tone_idx](E) for tone_idx in range(len(self.acoustic_heads))]
+            # t_pred - (2[list], batch_size, token_len, n_tones)
+
+            # Expand t_true to match per-token supervision
+            token_len = t_pred[0].shape[1]
+            t_true_expanded = [t_true_i.unsqueeze(1).expand(-1, token_len, -1) for t_true_i in t_true]
+
+            # Calculate classification loss
+            weight = token_mask.to(dtype=t_pred[0].dtype) if token_mask is not None else None
+            loss_cls_list = [self._loss_cls(t_pred_i, t_true_expanded_i, weight=weight)\
+                for t_pred_i, t_true_expanded_i in zip(t_pred, t_true_expanded)]
+            loss_cls_acoustic = torch.mean(torch.stack(loss_cls_list, dim=0))
+
+            # Optional contrastive loss for acoustic task
+            if self.params.acoustic_use_contra:
+                # Use acoustic tone embeddings as targets for contrastive learning
+                if 'semantic' not in targets_dict and 'visual' not in targets_dict:
+                    E_vq, loss_vq, _ = self.vq_block(E)
+                E_norm = F.normalize(E, p=2, dim=-1)
+                # For acoustic, we use encoder self-similarity as the contrastive target
+                loss_contra_acoustic, _ = self.contra_block(((E_norm, E_norm), (E_norm, E_norm)))
+                loss_acoustic = (
+                    self.params.acoustic_cls_loss_scale * loss_cls_acoustic +
+                    self.params.acoustic_contra_loss_scale * loss_contra_acoustic
+                )
+                losses['acoustic_contra'] = loss_contra_acoustic
+            else:
+                loss_acoustic = self.params.acoustic_cls_loss_scale * loss_cls_acoustic
+
+            outputs['acoustic'] = t_pred
+            losses['acoustic_cls'] = loss_cls_acoustic
+            losses['acoustic_cls_tone1'] = loss_cls_list[0]
+            losses['acoustic_cls_tone2'] = loss_cls_list[1]
+            losses['acoustic'] = loss_acoustic
+
+        # ===== Combine multi-task losses =====
+        if self.params.use_uncertainty_weighting:
+            # Uncertainty-based automatic task weighting (Kendall et al., 2018)
+            # loss_weighted = (1 / (2 * sigma^2)) * loss + log(sigma)
+            # where sigma^2 = exp(log_var)
+            loss_total = 0.0
+            if 'semantic' in losses:
+                precision_semantic = torch.exp(-self.log_var_semantic)
+                loss_total += precision_semantic * losses['semantic'] + self.log_var_semantic
+            if 'visual' in losses:
+                precision_visual = torch.exp(-self.log_var_visual)
+                loss_total += precision_visual * losses['visual'] + self.log_var_visual
+            if 'acoustic' in losses:
+                precision_acoustic = torch.exp(-self.log_var_acoustic)
+                loss_total += precision_acoustic * losses['acoustic'] + self.log_var_acoustic
+        else:
+            # Manual task weighting
+            loss_total = 0.0
+            if 'semantic' in losses:
+                loss_total += self.params.task_weight_semantic * losses['semantic']
+            if 'visual' in losses:
+                loss_total += self.params.task_weight_visual * losses['visual']
+            if 'acoustic' in losses:
+                loss_total += self.params.task_weight_acoustic * losses['acoustic']
+
+        losses['total'] = loss_total
+
+        # Convert to DotDict for consistency with other models
+        loss = DotDict(losses)
+
+        # Return outputs and losses
+        return outputs, loss
+
+    # def extract_embeddings func
+    def extract_embeddings(self, inputs):
+        """
+        Extract embeddings from all three tasks for fusion classifier.
+
+        Args:
+            inputs: tuple - The input data [X, subj_id]
+                X: (batch_size, seq_len, n_channels) - Brain signals
+                subj_id: (batch_size, n_subjects) - Subject IDs
+
+        Returns:
+            fused_emb: (batch_size, d_fusion) - Concatenated embeddings from all three tasks
+            emb_dict: dict - Individual embeddings for each task
+        """
+        X = inputs[0]
+        subj_id = inputs[1]
+
+        # Forward shared encoder
+        X_h = self.subj_block((X, subj_id))
+        T = self.tokenizer(X_h); token_shape = T.shape
+        E = torch.reshape(T, shape=(token_shape[0], -1, token_shape[-1]))
+        E = self.encoder(E)
+
+        # Extract embeddings from each task head
+        # Semantic - (batch_size, 768)
+        semantic_emb = self.semantic_head(E)
+        semantic_emb = F.normalize(semantic_emb, p=2, dim=-1)
+
+        # Visual - (batch_size, 768)
+        visual_emb = self.visual_head(E)
+        visual_emb = F.normalize(visual_emb, p=2, dim=-1)
+
+        # Acoustic - Extract features before final classification
+        # acoustic_emb - (batch_size, d_hidden[-1])
+        acoustic_features_list = []
+        for acoustic_head in self.acoustic_heads:
+            features, _ = acoustic_head(E, return_features=True)
+            acoustic_features_list.append(features)
+        # Average features from both tone heads
+        acoustic_emb = torch.mean(torch.stack(acoustic_features_list, dim=0), dim=0)
+        # acoustic_emb - (batch_size, d_hidden[-1] or d_model)
+
+        # Concatenate embeddings
+        fused_emb = torch.cat([semantic_emb, visual_emb, acoustic_emb], dim=-1)
+        # fused_emb - (batch_size, 768 + 768 + d_acoustic)
+
+        emb_dict = {
+            'semantic': semantic_emb,
+            'visual': visual_emb,
+            'acoustic': acoustic_emb,
+            'fused': fused_emb
+        }
+
+        return fused_emb, emb_dict
+
+    """
+    loss funcs
+    """
+    # def _loss_align func
+    def _loss_align(self, value, target):
+        """
+        Calculates alignment loss (MSE) between predicted and target embeddings.
+
+        Args:
+            value: (batch_size, d_output) - Predicted embedding from the model.
+            target: (batch_size, d_output) - Ground-truth or teacher embedding.
+
+        Returns:
+            loss: torch.float32 - Mean squared error between L2-normalized embeddings.
+        """
+        assert value.shape == target.shape, f"Shape mismatch: {value.shape} vs {target.shape}"
+        loss = 1000 * F.mse_loss(value, target, reduction="mean")
+        return loss
+
+    # def _loss_cls func
+    def _loss_cls(self, value, target, weight=None):
+        """
+        Calculates classification loss between tensors value and target.
+
+        Args:
+            value: (batch_size, emb_len, n_tones) - Value of the object.
+            target: (batch_size, emb_len, n_tones) - Target of the object.
+            weight: (batch_size, emb_len) - The regression weight.
+
+        Returns:
+            loss: torch.float32 - Loss between value and target.
+        """
+        batch_size, emb_len, n_tones = value.shape
+
+        # Apply L2 normalization to logits if enabled
+        if self.params.acoustic_cls.use_l2_norm:
+            value_normalized = F.normalize(value, p=2, dim=-1, eps=1e-12)
+        else:
+            value_normalized = value
+
+        # Calculate cross-entropy loss
+        loss = torch.reshape(F.cross_entropy(
+            input=torch.reshape(value_normalized, shape=(-1, n_tones)),
+            target=torch.reshape(target, shape=(-1, n_tones)),
+            weight=None, size_average=None, ignore_index=-100,
+            reduce=None, reduction="none", label_smoothing=0.
+        ), shape=(batch_size, emb_len))
+
+        # Weight loss according to weight
+        loss = torch.sum(loss * weight) / (torch.sum(weight) + 1e-12)\
+            if weight is not None else torch.mean(loss)
+
+        return loss
+
+    """
+    tool funcs
+    """
+    # def get_weight_i func
+    def get_weight_i(self):
+        """
+        Get the contribution weights of each input channel.
+
+        Args:
+            None
+
+        Returns:
+            ch_weights: (n_subjects, n_channels) - The contribution weights of each input channel.
+        """
+        return self.subj_block.get_weight_i()
+
+# def duin_fusion_cls class
+class duin_fusion_cls(nn.Module):
+    """
+    DuIN fusion classifier for 61-word classification.
+    Uses pretrained multi-task model to extract embeddings from semantic, visual, and acoustic tasks,
+    then fuses them for end-to-end 61-word classification.
+    """
+
+    def __init__(self, params, **kwargs):
+        """
+        Initialize `duin_fusion_cls` object.
+
+        Args:
+            params: DotDict - Model parameters initialized by duin_fusion_cls_params, updated by params.iteration.
+            kwargs: dict - The arguments related to initialize `nn.Module`-style object.
+
+        Returns:
+            None
+        """
+        super(duin_fusion_cls, self).__init__(**kwargs)
+
+        # Initialize parameters.
+        self.params = cp.deepcopy(params)
+
+        # Initialize variables.
+        self._init_model(); self._init_weight()
+
+    """
+    init funcs
+    """
+    # def _init_model func
+    def _init_model(self):
+        """
+        Initialize model architecture.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        # Load pretrained multi-task model
+        # Import the multitask params to get the architecture
+        from params.duin_params import duin_multitask_params
+        multitask_params = duin_multitask_params(dataset=self.params.dataset)
+
+        # Update multitask params with any custom settings from fusion params
+        # (e.g., encoder dropout, head architecture)
+        if hasattr(self.params, 'multitask_encoder'):
+            for key, value in self.params.multitask_encoder.items():
+                if hasattr(multitask_params.model.encoder, key):
+                    setattr(multitask_params.model.encoder, key, value)
+
+        # Initialize the multi-task model
+        self.multitask_model = duin_multitask(params=multitask_params.model)
+
+        # Freeze encoder if specified
+        if self.params.freeze_encoder:
+            for param in self.multitask_model.subj_block.parameters():
+                param.requires_grad = False
+            for param in self.multitask_model.tokenizer.parameters():
+                param.requires_grad = False
+            for param in self.multitask_model.encoder.parameters():
+                param.requires_grad = False
+            print("INFO: Frozen encoder (SubjectBlock + Tokenizer + Encoder)")
+
+        # Freeze task heads if specified
+        if self.params.freeze_task_heads:
+            for param in self.multitask_model.semantic_head.parameters():
+                param.requires_grad = False
+            for param in self.multitask_model.visual_head.parameters():
+                param.requires_grad = False
+            for param in self.multitask_model.acoustic_heads.parameters():
+                param.requires_grad = False
+            print("INFO: Frozen task heads (Semantic + Visual + Acoustic)")
+
+        # Calculate fusion dimension dynamically from loaded multitask model
+        # d_fusion = 768 (semantic) + 768 (visual) + d_acoustic
+        # d_acoustic depends on the acoustic head's d_hidden[-1] or d_model
+        acoustic_d_hidden = multitask_params.model.acoustic_cls.d_hidden
+        d_acoustic = acoustic_d_hidden[-1] if len(acoustic_d_hidden) > 0 else multitask_params.model.encoder.d_model
+        self.d_fusion = 768 + 768 + d_acoustic
+
+        print(f"INFO: Fusion dimension calculated as {self.d_fusion} (768 + 768 + {d_acoustic})")
+
+        # Initialize fusion classification head
+        # fusion_head - (batch_size, d_fusion) -> (batch_size, n_labels)
+        self.fusion_head = nn.Sequential()
+
+        # Add hidden layers
+        for hidden_idx in range(len(self.params.fusion.d_hidden)):
+            self.fusion_head.append(nn.Sequential(
+                nn.Linear(
+                    in_features=(self.params.fusion.d_hidden[hidden_idx-1] if hidden_idx > 0 else self.d_fusion),
+                    out_features=self.params.fusion.d_hidden[hidden_idx],
+                    bias=True, device=None, dtype=None
+                ),
+                nn.ReLU(inplace=False),
+            ))
+
+        # Add dropout if specified
+        if self.params.fusion.dropout > 0.:
+            self.fusion_head.append(nn.Dropout(p=self.params.fusion.dropout, inplace=False))
+
+        # Add final classification layer
+        self.fusion_head.append(nn.Sequential(
+            nn.Linear(
+                in_features=(self.params.fusion.d_hidden[-1] if len(self.params.fusion.d_hidden) > 0 else self.d_fusion),
+                out_features=self.params.fusion.n_labels,
+                bias=True, device=None, dtype=None
+            ),
+            nn.Sigmoid()
+        ))
+
+    # def _init_weight func
+    def _init_weight(self):
+        """
+        Initialize model weights.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        # Initialize weights for fusion head only (multitask model weights are loaded separately)
+        for module_i in self.fusion_head.modules():
+            if isinstance(module_i, nn.Linear):
+                nn.init.trunc_normal_(module_i.weight, mean=0., std=0.02)
+                if module_i.bias is not None: nn.init.constant_(module_i.bias, val=0.)
+
+    """
+    load funcs
+    """
+    # def load_weight func
+    def load_weight(self, path_ckpt):
+        """
+        Load model weights from the specified multi-task checkpoint path.
+
+        Args:
+            path_ckpt: str - The path of the specified multi-task checkpoint.
+
+        Returns:
+            None
+        """
+        # Initialize `ckpt_dict`.
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        ckpt_dict = torch.load(path_ckpt, map_location=device)
+
+        # Load weights into multitask_model
+        # The checkpoint should contain all multitask model parameters
+        model_dict = {}
+        for parameter_name_i in ckpt_dict.keys():
+            # Add "multitask_model." prefix to all checkpoint keys
+            model_dict[f"multitask_model.{parameter_name_i}"] = ckpt_dict[parameter_name_i]
+
+        # Load the state dict (strict=False to allow fusion_head to be uninitialized)
+        missing_keys, unexpected_keys = self.load_state_dict(model_dict, strict=False)
+
+        # Log information related to parameter load.
+        print((
+            "INFO: Complete loading pretrained multi-task weights from checkpoint ({}) in models.duin.duin_fusion_cls."
+        ).format(path_ckpt))
+        print(f"INFO: Missing keys (fusion_head): {[k for k in missing_keys if 'fusion_head' in k]}")
+        print(f"INFO: Unexpected keys: {unexpected_keys}")
+
+    """
+    network funcs
+    """
+    # def forward func
+    def forward(self, inputs):
+        """
+        Forward `duin_fusion_cls` to get 61-word classification predictions.
+
+        Args:
+            inputs: tuple - The input data [X, y_true, subj_id]
+                X: (batch_size, seq_len, n_channels) - Brain signals
+                y_true: (batch_size,) - Ground-truth word labels (for loss computation)
+                subj_id: (batch_size, n_subjects) - Subject IDs
+
+        Returns:
+            y_pred: (batch_size, 61) - Predicted word probabilities
+            loss: DotDict - Classification loss
+        """
+        # Initialize components of inputs
+        X = inputs[0]
+        y_true = inputs[1]
+        subj_id = inputs[2]
+
+        # Extract fused embeddings from multi-task model
+        # If encoder is frozen, use torch.no_grad for efficiency
+        if self.params.freeze_encoder and self.params.freeze_task_heads:
+            with torch.no_grad():
+                fused_emb, emb_dict = self.multitask_model.extract_embeddings((X, subj_id))
+        else:
+            fused_emb, emb_dict = self.multitask_model.extract_embeddings((X, subj_id))
+
+        # Forward through fusion classification head
+        y_pred = self.fusion_head(fused_emb)  # (batch_size, 61)
+
+        # Calculate classification loss
+        loss_cls = self._loss_cls(y_pred, y_true)
+
+        # Calculate total loss
+        loss_total = self.params.cls_loss_scale * loss_cls
+
+        # Prepare loss dict
+        loss = utils.DotDict({
+            "total": loss_total,
+            "cls": loss_cls,
+        })
+
+        # Return predictions and loss
+        return y_pred, loss
+
+    """
+    loss funcs
+    """
+    # def _loss_cls func
+    def _loss_cls(self, value, target):
+        """
+        Calculates classification loss between prediction and target.
+
+        Args:
+            value: (batch_size, n_labels) - Predicted probabilities.
+            target: (batch_size, n_labels) - Target one-hot labels.
+
+        Returns:
+            loss: torch.float32 - Cross-entropy loss.
+        """
+        # Calculate cross-entropy loss
+        loss = F.cross_entropy(
+            input=value, target=target,
+            weight=None, size_average=None, ignore_index=-100,
+            reduce=None, reduction="mean", label_smoothing=0.
+        )
+        return loss
+
+    """
+    tool funcs
+    """
+    # def get_weight_i func
+    def get_weight_i(self):
+        """
+        Get the contribution weights of each input channel.
+
+        Args:
+            None
+
+        Returns:
+            ch_weights: (n_subjects, n_channels) - The contribution weights of each input channel.
+        """
+        return self.multitask_model.subj_block.get_weight_i()
 
 if __name__ == "__main__":
     import numpy as np
