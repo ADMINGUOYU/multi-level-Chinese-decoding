@@ -37,6 +37,7 @@ TASK_WEIGHT_VISUAL=1.0        # Weight for visual task
 TASK_WEIGHT_ACOUSTIC=1.0      # Weight for acoustic task
 
 # Multi-task learning strategy flags
+# USE_UNCERTAINTY_WEIGHTING="--use_uncertainty_weighting"  # Set to "--use_uncertainty_weighting" to enable auto-balancing, default as ""
 USE_UNCERTAINTY_WEIGHTING=""  # Set to "--use_uncertainty_weighting" to enable auto-balancing, default as ""
 ACOUSTIC_USE_CONTRA=""        # Set to "--acoustic_use_contra" to add contrastive loss to acoustic task, default as ""
 
@@ -61,12 +62,12 @@ ACOUSTIC_CONTRA_LOSS_SCALE=0.5     # Acoustic contrastive loss scale (only if ac
 ################################################################################
 
 # Semantic alignment head architecture
-SEMANTIC_D_HIDDEN="2048,1024,768"  # Hidden layer dimensions (comma-separated)
-SEMANTIC_DROPOUT=0.1               # Dropout rate for semantic head
+SEMANTIC_D_HIDDEN="1024,768"  # Hidden layer dimensions (comma-separated)
+SEMANTIC_DROPOUT=0.2               # Dropout rate for semantic head
 
 # Visual alignment head architecture
-VISUAL_D_HIDDEN="2048,1024,768"    # Hidden layer dimensions (comma-separated)
-VISUAL_DROPOUT=0.1                 # Dropout rate for visual head
+VISUAL_D_HIDDEN="1024,768"    # Hidden layer dimensions (comma-separated)
+VISUAL_DROPOUT=0.2                 # Dropout rate for visual head
 
 # Acoustic classification head architecture
 ACOUSTIC_D_HIDDEN="128"            # Hidden layer dimensions (comma-separated)
