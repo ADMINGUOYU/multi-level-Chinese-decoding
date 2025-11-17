@@ -75,6 +75,10 @@ def init(params_):
     os.makedirs(paths.run.save_embeddings, exist_ok=True)
     print(f"[INFO] Embeddings directory created at: {paths.run.save_embeddings}")
 
+    paths.run.summaries = os.path.join(paths.run.train, "summaries")
+    os.makedirs(paths.run.summaries, exist_ok=True)
+    print(f"[INFO] Summaries directory created at: {paths.run.summaries}")
+
     # --- Save training metadata ---
     training_info_path = os.path.join(paths.run.train, "training_info.txt")
     subj_i = params.train.subjs[0]
@@ -560,6 +564,138 @@ class MultitaskDataset(torch.utils.data.Dataset):
 """
 train funcs
 """
+# def log_loss_block func
+def log_loss_block(phase_name, loss_dict):
+    """
+    Format loss information for logging.
+
+    Args:
+        phase_name: str - The phase name (train, validation, test).
+        loss_dict: dict - Dictionary of loss values.
+
+    Returns:
+        msg: str - Formatted loss message.
+    """
+    loss_keys = list(loss_dict.keys())
+    msg = f"Loss({phase_name}): {loss_dict[loss_keys[0]]:.5f} ({loss_keys[0]})"
+    for loss_idx in range(1, len(loss_keys)):
+        msg += "; {:.5f} ({})".format(loss_dict[loss_keys[loss_idx]], loss_keys[loss_idx])
+    return msg
+
+# def _evaluate func
+def _evaluate(model, dataloader, params, device):
+    """
+    Evaluate model on a dataset (validation or test).
+
+    Args:
+        model: torch.nn.Module - The model to evaluate.
+        dataloader: DataLoader - The dataloader for evaluation.
+        params: DotDict - The parameters.
+        device: str - The device to use.
+
+    Returns:
+        loss_dict: DotDict - Dictionary of averaged losses.
+        semantic_embeddings: np.ndarray - Predicted semantic embeddings.
+        visual_embeddings: np.ndarray - Predicted visual embeddings.
+        acoustic_results: dict - Acoustic classification results (accuracy, predictions).
+    """
+    model.eval()
+    loss_dict = utils.DotDict()
+
+    # Collect embeddings and predictions
+    all_semantic_embs = []
+    all_visual_embs = []
+    all_semantic_labels = []
+    all_visual_labels = []
+    all_tone1_preds = []
+    all_tone1_labels = []
+    all_tone2_preds = []
+    all_tone2_labels = []
+
+    with torch.no_grad():
+        for batch_data in dataloader:
+            X, y_semantic, y_visual, y_tone1, y_tone2, subj_id = batch_data
+            X = X.to(device=device, dtype=torch.float32)
+            y_semantic = y_semantic.to(device=device, dtype=torch.float32)
+            y_visual = y_visual.to(device=device, dtype=torch.float32)
+            y_tone1 = y_tone1.to(device=device, dtype=torch.float32)
+            y_tone2 = y_tone2.to(device=device, dtype=torch.float32)
+            subj_id = subj_id.to(device=device, dtype=torch.float32)
+
+            # Prepare targets dict
+            targets_dict = {
+                'semantic': y_semantic,
+                'visual': y_visual,
+                'acoustic': [y_tone1, y_tone2]
+            }
+
+            # Create token mask
+            token_len = params.model.encoder.emb_len
+            token_mask = torch.ones((X.shape[0], token_len), dtype=torch.float32, device=device)
+
+            # Forward pass
+            inputs = [X, targets_dict, subj_id, token_mask]
+            outputs, loss = model(inputs)
+
+            batch_size_i = X.shape[0]
+
+            # Aggregate losses
+            for key_i in ['total', 'semantic', 'visual', 'acoustic']:
+                if hasattr(loss, key_i):
+                    loss_val = getattr(loss, key_i).item()
+                    if hasattr(loss_dict, key_i):
+                        loss_dict[key_i].append(np.array([loss_val, batch_size_i], dtype=np.float32))
+                    else:
+                        loss_dict[key_i] = [np.array([loss_val, batch_size_i], dtype=np.float32)]
+
+            # Collect embeddings
+            all_semantic_embs.append(outputs['semantic'].detach().cpu().numpy())
+            all_visual_embs.append(outputs['visual'].detach().cpu().numpy())
+            all_semantic_labels.append(y_semantic.detach().cpu().numpy())
+            all_visual_labels.append(y_visual.detach().cpu().numpy())
+
+            # Collect acoustic predictions (average across token dimension)
+            tone1_pred = outputs['acoustic'][0].detach().cpu().numpy()  # (batch, token_len, n_tones)
+            tone2_pred = outputs['acoustic'][1].detach().cpu().numpy()
+            tone1_pred = np.mean(tone1_pred, axis=1)  # (batch, n_tones)
+            tone2_pred = np.mean(tone2_pred, axis=1)
+            all_tone1_preds.append(tone1_pred)
+            all_tone2_preds.append(tone2_pred)
+            all_tone1_labels.append(y_tone1.detach().cpu().numpy())
+            all_tone2_labels.append(y_tone2.detach().cpu().numpy())
+
+    # Average losses
+    for key_i, item_i in loss_dict.items():
+        item_i = np.stack(item_i, axis=0)
+        item_i = np.sum(item_i[:, 0] * item_i[:, 1]) / np.sum(item_i[:, 1])
+        loss_dict[key_i] = item_i
+
+    # Concatenate embeddings
+    semantic_embeddings = np.concatenate(all_semantic_embs, axis=0)
+    visual_embeddings = np.concatenate(all_visual_embs, axis=0)
+    semantic_labels = np.concatenate(all_semantic_labels, axis=0)
+    visual_labels = np.concatenate(all_visual_labels, axis=0)
+
+    # Calculate acoustic accuracy
+    tone1_preds = np.concatenate(all_tone1_preds, axis=0)
+    tone2_preds = np.concatenate(all_tone2_preds, axis=0)
+    tone1_labels = np.concatenate(all_tone1_labels, axis=0)
+    tone2_labels = np.concatenate(all_tone2_labels, axis=0)
+
+    tone1_acc = np.mean(np.argmax(tone1_preds, axis=-1) == np.argmax(tone1_labels, axis=-1))
+    tone2_acc = np.mean(np.argmax(tone2_preds, axis=-1) == np.argmax(tone2_labels, axis=-1))
+
+    acoustic_results = {
+        'tone1_acc': tone1_acc,
+        'tone2_acc': tone2_acc,
+        'tone1_preds': tone1_preds,
+        'tone2_preds': tone2_preds,
+        'tone1_labels': tone1_labels,
+        'tone2_labels': tone2_labels,
+    }
+
+    return loss_dict, semantic_embeddings, visual_embeddings, semantic_labels, visual_labels, acoustic_results
+
 # def train func
 def train():
     """
@@ -670,6 +806,11 @@ def train():
     # Load data
     dataset_train, dataset_validation, dataset_test = load_data(load_params)
 
+    # Initialize model device - set to GPU if available
+    params.model.device = torch.device("cuda:{:d}".format(0)) if torch.cuda.is_available() else torch.device("cpu")
+    print(f"[INFO] Using device: {params.model.device}")
+    paths.run.logger.summaries.info(f"Using device: {params.model.device}")
+
     # Debug: Print params before model creation
     print(f"[DEBUG] Before model creation:")
     print(f"  params.model.n_channels: {params.model.n_channels}")
@@ -690,16 +831,26 @@ def train():
     # Initialize optimizer
     optimizer = torch.optim.AdamW(model.parameters(), lr=params.train.lr_i)
 
+    # Initialize best result tracking
+    best_val_total_loss = float('inf')
+    best_val_semantic_loss = float('inf')
+    best_val_visual_loss = float('inf')
+    best_val_acoustic_acc = 0.0
+    best_epoch = -1
+    best_ckpt_path = None
+
+    # Get TensorBoard writer
+    writer = paths.run.logger.tensorboard
+
     # Training loop
     for epoch_idx in range(params.train.n_epochs):
+        time_start = time.time()
         params.train.epoch = epoch_idx
-        msg = (
-            "INFO: Training epoch ({}) starts with lr ({:.6e})."
-        ).format(epoch_idx, params.train.lr_i)
-        print(msg); paths.run.logger.summaries.info(msg)
 
-        # Train
+        # === Training Phase ===
         model.train()
+        loss_train = utils.DotDict()
+
         for batch_idx, batch_data in enumerate(dataset_train):
             X, y_semantic, y_visual, y_tone1, y_tone2, subj_id = batch_data
             X = X.to(device=params.model.device, dtype=torch.float32)
@@ -729,30 +880,171 @@ def train():
             loss.total.backward()
             optimizer.step()
 
-            if (batch_idx + 1) % 10 == 0:
-                msg = (
-                    "Epoch [{}/{}], Batch [{}/{}], Loss: {:.4f} (Sem: {:.4f}, Vis: {:.4f}, Aco: {:.4f})"
-                ).format(
-                    epoch_idx + 1, params.train.n_epochs, batch_idx + 1, len(dataset_train),
-                    loss.total.item(),
-                    loss.semantic.item() if 'semantic' in loss else 0.,
-                    loss.visual.item() if 'visual' in loss else 0.,
-                    loss.acoustic.item() if 'acoustic' in loss else 0.
-                )
-                print(msg)
+            # Aggregate losses
+            batch_size_i = X.shape[0]
+            for key_i in ['total', 'semantic', 'visual', 'acoustic']:
+                if hasattr(loss, key_i):
+                    loss_val = getattr(loss, key_i).item()
+                    if hasattr(loss_train, key_i):
+                        loss_train[key_i].append(np.array([loss_val, batch_size_i], dtype=np.float32))
+                    else:
+                        loss_train[key_i] = [np.array([loss_val, batch_size_i], dtype=np.float32)]
 
-        # Save checkpoint
+        # Average training losses
+        for key_i, item_i in loss_train.items():
+            item_i = np.stack(item_i, axis=0)
+            item_i = np.sum(item_i[:, 0] * item_i[:, 1]) / np.sum(item_i[:, 1])
+            loss_train[key_i] = item_i
+
+        # === Validation Phase ===
+        loss_validation, val_semantic_embs, val_visual_embs, val_semantic_labels, val_visual_labels, val_acoustic_results = _evaluate(
+            model, dataset_validation, params, params.model.device
+        )
+
+        # === Test Phase ===
+        loss_test, test_semantic_embs, test_visual_embs, test_semantic_labels, test_visual_labels, test_acoustic_results = _evaluate(
+            model, dataset_test, params, params.model.device
+        )
+
+        # === Log epoch time ===
+        time_stop = time.time()
+        msg = f"Finish train epoch {epoch_idx} in {time_stop - time_start:.2f} seconds."
+        print(msg); paths.run.logger.summaries.info(msg)
+
+        # === Log losses to summaries.log ===
+        msg = log_loss_block("train", loss_train)
+        print(msg); paths.run.logger.summaries.info(msg)
+        msg = log_loss_block("validation", loss_validation)
+        print(msg); paths.run.logger.summaries.info(msg)
+        msg = log_loss_block("test", loss_test)
+        print(msg); paths.run.logger.summaries.info(msg)
+
+        # === Log acoustic accuracy ===
+        msg = f"Accuracy(validation): tone1={val_acoustic_results['tone1_acc']:.4f}, tone2={val_acoustic_results['tone2_acc']:.4f}"
+        print(msg); paths.run.logger.summaries.info(msg)
+        msg = f"Accuracy(test): tone1={test_acoustic_results['tone1_acc']:.4f}, tone2={test_acoustic_results['tone2_acc']:.4f}"
+        print(msg); paths.run.logger.summaries.info(msg)
+
+        # === Log to TensorBoard ===
+        # Log losses
+        for phase_name, loss_dict in [("train", loss_train), ("validation", loss_validation), ("test", loss_test)]:
+            for key_i, loss_i in loss_dict.items():
+                writer.add_scalar(os.path.join("losses", phase_name, key_i), loss_i, global_step=epoch_idx)
+
+        # Log acoustic accuracy
+        writer.add_scalar("accuracy/validation/tone1", val_acoustic_results['tone1_acc'], global_step=epoch_idx)
+        writer.add_scalar("accuracy/validation/tone2", val_acoustic_results['tone2_acc'], global_step=epoch_idx)
+        writer.add_scalar("accuracy/test/tone1", test_acoustic_results['tone1_acc'], global_step=epoch_idx)
+        writer.add_scalar("accuracy/test/tone2", test_acoustic_results['tone2_acc'], global_step=epoch_idx)
+
+        # Log learning rate
+        writer.add_scalar("learning_rate", params.train.lr_i, global_step=epoch_idx)
+
+        # === Track and save best model ===
+        current_val_total_loss = loss_validation.get("total", float('inf'))
+        if current_val_total_loss < best_val_total_loss:
+            # Remove previous best checkpoint
+            if best_ckpt_path is not None and os.path.exists(best_ckpt_path):
+                os.remove(best_ckpt_path)
+                msg = f"Removed previous best checkpoint: {best_ckpt_path}"
+                print(msg); paths.run.logger.summaries.info(msg)
+
+            best_val_total_loss = current_val_total_loss
+            best_val_semantic_loss = loss_validation.get("semantic", float('inf'))
+            best_val_visual_loss = loss_validation.get("visual", float('inf'))
+            best_val_acoustic_acc = (val_acoustic_results['tone1_acc'] + val_acoustic_results['tone2_acc']) / 2
+            best_epoch = epoch_idx
+
+            # Save best model checkpoint to summaries directory
+            best_ckpt_path = os.path.join(paths.run.summaries, f"best_epoch_{epoch_idx:03d}_loss_{best_val_total_loss:.5f}.pth")
+            model_to_save = model.module if hasattr(model, 'module') else model
+            torch.save(model_to_save.state_dict(), best_ckpt_path)
+            msg = f"New best model saved (epoch {epoch_idx}) with val_loss={best_val_total_loss:.6f}"
+            print(msg); paths.run.logger.summaries.info(msg)
+
+            # Save best results to summaries directory
+            np.savez(
+                os.path.join(paths.run.summaries, "best_semantic_embeddings.npz"),
+                embeddings=test_semantic_embs,
+                labels=test_semantic_labels
+            )
+            np.savez(
+                os.path.join(paths.run.summaries, "best_visual_embeddings.npz"),
+                embeddings=test_visual_embs,
+                labels=test_visual_labels
+            )
+            np.savez(
+                os.path.join(paths.run.summaries, "best_acoustic_results.npz"),
+                tone1_acc=test_acoustic_results['tone1_acc'],
+                tone2_acc=test_acoustic_results['tone2_acc'],
+                tone1_preds=test_acoustic_results['tone1_preds'],
+                tone2_preds=test_acoustic_results['tone2_preds'],
+                tone1_labels=test_acoustic_results['tone1_labels'],
+                tone2_labels=test_acoustic_results['tone2_labels']
+            )
+            msg = f"Best results saved to {paths.run.summaries}"
+            print(msg); paths.run.logger.summaries.info(msg)
+
+        # === Save checkpoint and results every 50 epochs ===
         if (epoch_idx + 1) % 50 == 0 or (epoch_idx + 1) == params.train.n_epochs:
-            ckpt_path = os.path.join(paths.run.ckpt, f"checkpoint-{epoch_idx}.pth")
+            # Save checkpoint
+            ckpt_path = os.path.join(paths.run.ckpt, f"checkpoint-{epoch_idx:03d}.pth")
             model_to_save = model.module if hasattr(model, 'module') else model
             torch.save(model_to_save.state_dict(), ckpt_path)
             msg = f"INFO: Saved checkpoint to {ckpt_path}"
+            print(msg); paths.run.logger.summaries.info(msg)
+
+            # Save semantic embeddings
+            semantic_emb_path = os.path.join(paths.run.save_embeddings, f"semantic_embeddings_epoch_{epoch_idx + 1:03d}.npz")
+            np.savez(semantic_emb_path, embeddings=test_semantic_embs, labels=test_semantic_labels)
+            msg = f"INFO: Saved semantic embeddings to {semantic_emb_path}"
+            print(msg); paths.run.logger.summaries.info(msg)
+
+            # Save visual embeddings
+            visual_emb_path = os.path.join(paths.run.save_embeddings, f"visual_embeddings_epoch_{epoch_idx + 1:03d}.npz")
+            np.savez(visual_emb_path, embeddings=test_visual_embs, labels=test_visual_labels)
+            msg = f"INFO: Saved visual embeddings to {visual_emb_path}"
+            print(msg); paths.run.logger.summaries.info(msg)
+
+            # Save acoustic results
+            acoustic_result_path = os.path.join(paths.run.save_embeddings, f"acoustic_results_epoch_{epoch_idx + 1:03d}.npz")
+            np.savez(
+                acoustic_result_path,
+                tone1_acc=test_acoustic_results['tone1_acc'],
+                tone2_acc=test_acoustic_results['tone2_acc'],
+                tone1_preds=test_acoustic_results['tone1_preds'],
+                tone2_preds=test_acoustic_results['tone2_preds'],
+                tone1_labels=test_acoustic_results['tone1_labels'],
+                tone2_labels=test_acoustic_results['tone2_labels']
+            )
+            msg = f"INFO: Saved acoustic results to {acoustic_result_path}"
             print(msg); paths.run.logger.summaries.info(msg)
 
         # Update learning rate
         params.iteration(epoch_idx + 1)
         for param_group in optimizer.param_groups:
             param_group["lr"] = params.train.lr_i
+
+    # === Final summary ===
+    msg = f"\n{'=' * 50}\nTraining Complete!\n{'=' * 50}"
+    print(msg); paths.run.logger.summaries.info(msg)
+    msg = f"Best epoch: {best_epoch}"
+    print(msg); paths.run.logger.summaries.info(msg)
+    msg = f"Best validation total loss: {best_val_total_loss:.6f}"
+    print(msg); paths.run.logger.summaries.info(msg)
+    msg = f"Best validation semantic loss: {best_val_semantic_loss:.6f}"
+    print(msg); paths.run.logger.summaries.info(msg)
+    msg = f"Best validation visual loss: {best_val_visual_loss:.6f}"
+    print(msg); paths.run.logger.summaries.info(msg)
+    msg = f"Best validation acoustic accuracy: {best_val_acoustic_acc:.4f}"
+    print(msg); paths.run.logger.summaries.info(msg)
+    msg = f"Best model saved at: {best_ckpt_path}"
+    print(msg); paths.run.logger.summaries.info(msg)
+    msg = f"Best results saved in: {paths.run.summaries}"
+    print(msg); paths.run.logger.summaries.info(msg)
+
+    # Close TensorBoard writer
+    writer.close()
 
 """
 arg funcs
