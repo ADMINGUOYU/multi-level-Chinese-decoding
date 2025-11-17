@@ -420,8 +420,61 @@ if __name__ == "__main__":
         for subj_i, subj_idx_i in zip(subjs, subj_idxs):
             # Initialize random seed.
             utils.model.torch.set_seeds(seed_i)
-            # Initialize params.
-            params_i = duin_fusion_cls_params(dataset="seeg_he2023xuanwu")
+
+            # ===== LOAD PARAMS FROM PRETRAINED MULTITASK CHECKPOINT =====
+            # Extract the params path from the checkpoint path
+            # e.g., checkpoint-299.pth -> ../../save/params
+            pt_ckpt_path = args.pt_multitask_ckpt
+            pt_params_path = os.path.join(os.path.dirname(pt_ckpt_path), "..", "..", "save", "params")
+
+            if os.path.exists(pt_params_path):
+                # Load pretrained multitask params
+                params_pt = load_pickle(pt_params_path)
+                print(f"[INFO] Loaded pretrained multitask params from: {pt_params_path}")
+
+                # Initialize fusion classifier params based on pretrained params
+                params_i = duin_fusion_cls_params(dataset="seeg_he2023xuanwu")
+
+                # Copy all multitask-related parameters from pretrained params
+                # These MUST match the checkpoint exactly
+                params_i.model.n_subjects = params_pt.model.n_subjects
+                params_i.model.n_channels = params_pt.model.n_channels
+                params_i.model.seq_len = params_pt.model.seq_len
+                params_i.model.seg_len = params_pt.model.seg_len
+
+                # Copy SubjectBlock params
+                params_i.model.subj = cp.deepcopy(params_pt.model.subj)
+
+                # Copy Tokenizer params
+                params_i.model.tokenizer = cp.deepcopy(params_pt.model.tokenizer)
+
+                # Copy Encoder params
+                params_i.model.encoder = cp.deepcopy(params_pt.model.encoder)
+
+                # Copy VQ params
+                params_i.model.vq = cp.deepcopy(params_pt.model.vq)
+
+                # Copy Contrastive params
+                params_i.model.contra = cp.deepcopy(params_pt.model.contra)
+
+                # Copy task-specific head params
+                params_i.model.semantic_align = cp.deepcopy(params_pt.model.semantic_align)
+                params_i.model.visual_align = cp.deepcopy(params_pt.model.visual_align)
+                params_i.model.acoustic_cls = cp.deepcopy(params_pt.model.acoustic_cls)
+
+                # Copy multitask-specific parameters
+                params_i.model.task_weight_semantic = params_pt.model.task_weight_semantic
+                params_i.model.task_weight_visual = params_pt.model.task_weight_visual
+                params_i.model.task_weight_acoustic = params_pt.model.task_weight_acoustic
+                params_i.model.use_uncertainty_weighting = params_pt.model.use_uncertainty_weighting
+                params_i.model.acoustic_use_contra = params_pt.model.acoustic_use_contra
+
+                print(f"[INFO] Copied architecture params from pretrained multitask model")
+            else:
+                print(f"[WARNING] Pretrained params not found at: {pt_params_path}")
+                print(f"[WARNING] Using default params - this may cause architecture mismatch!")
+                # Initialize params with defaults (may not match checkpoint)
+                params_i = duin_fusion_cls_params(dataset="seeg_he2023xuanwu")
             # Use project root if args.base is the default, otherwise use args.base
             params_i.train.base = project_root if args.base == os.getcwd() else args.base
             params_i.train.seed = seed_i

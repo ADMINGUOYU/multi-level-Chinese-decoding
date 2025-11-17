@@ -16,7 +16,7 @@ SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SO
 SEEDS="42"                    # Random seeds (space-separated for multiple runs)
 # Subject list - will loop through all subjects sequentially
 # ALL_SUBJS=("001" "002" "003" "004" "005" "006" "007" "008" "009" "010" "011" "012")
-ALL_SUBJS=("001" "002" "003")
+ALL_SUBJS=("004")
 
 # Learning rate schedule
 LR_MIN=1e-5                   # Minimum learning rate (cosine annealing end)

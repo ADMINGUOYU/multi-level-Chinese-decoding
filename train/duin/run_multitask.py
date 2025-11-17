@@ -274,10 +274,13 @@ def _load_data_seeg_he2023xuanwu(load_params):
     # === Initialize data containers ===
     Xs_train = []; ys_semantic_train = []; ys_visual_train = []
     ys_acoustic_tone1_train = []; ys_acoustic_tone2_train = []; subj_ids_train = []
+    y_idx_train = []  # ← Add integer label storage for train
     Xs_validation = []; ys_semantic_validation = []; ys_visual_validation = []
     ys_acoustic_tone1_validation = []; ys_acoustic_tone2_validation = []; subj_ids_validation = []
+    y_idx_validation = []  # ← Add integer label storage for validation
     Xs_test = []; ys_semantic_test = []; ys_visual_test = []
     ys_acoustic_tone1_test = []; ys_acoustic_tone2_test = []; subj_ids_test = []
+    y_idx_test = []  # ← Add integer label storage for test
 
     # === Loop through subjects (same as existing scripts) ===
     for subj_idx, subj_cfg_i in zip(subj_idxs, subjs_cfg):
@@ -343,6 +346,8 @@ def _load_data_seeg_he2023xuanwu(load_params):
         y_visual_validation = y_visual_test[validation_mask,:]; y_visual_test = y_visual_test[~validation_mask,:]
         y_tone1_validation = y_tone1_test_oh[validation_mask,:]; y_tone1_test = y_tone1_test_oh[~validation_mask,:]
         y_tone2_validation = y_tone2_test_oh[validation_mask,:]; y_tone2_test = y_tone2_test_oh[~validation_mask,:]
+        # Split integer labels too
+        y_idx_validation = y_test_idx[validation_mask]; y_idx_test = y_test_idx[~validation_mask]
 
         # Create subject IDs (same as run_align_vis.py)
         subj_id_train = np.array([np.eye(n_subjects)[subj_idx] for _ in range(X_train.shape[0])])
@@ -359,15 +364,18 @@ def _load_data_seeg_he2023xuanwu(load_params):
         Xs_train.append(X_train); ys_semantic_train.append(y_semantic_train); ys_visual_train.append(y_visual_train)
         ys_acoustic_tone1_train.append(y_tone1_train_oh); ys_acoustic_tone2_train.append(y_tone2_train_oh)
         subj_ids_train.append(subj_id_train)
+        y_idx_train.append(y_train_idx)  # ← Store integer labels
 
         Xs_validation.append(X_validation); ys_semantic_validation.append(y_semantic_validation)
         ys_visual_validation.append(y_visual_validation)
         ys_acoustic_tone1_validation.append(y_tone1_validation); ys_acoustic_tone2_validation.append(y_tone2_validation)
         subj_ids_validation.append(subj_id_validation)
+        y_idx_validation.append(y_idx_validation)  # ← Store integer labels
 
         Xs_test.append(X_test); ys_semantic_test.append(y_semantic_test); ys_visual_test.append(y_visual_test)
         ys_acoustic_tone1_test.append(y_tone1_test); ys_acoustic_tone2_test.append(y_tone2_test)
         subj_ids_test.append(subj_id_test)
+        y_idx_test.append(y_idx_test)  # ← Store integer labels
 
         # Update params
         n_channels = max(X.shape[-1], n_channels) if n_channels is not None else X.shape[-1]
@@ -390,6 +398,7 @@ def _load_data_seeg_he2023xuanwu(load_params):
     ys_acoustic_tone1_train = np.concatenate(ys_acoustic_tone1_train, axis=0)
     ys_acoustic_tone2_train = np.concatenate(ys_acoustic_tone2_train, axis=0)
     subj_ids_train = np.concatenate(subj_ids_train, axis=0)
+    y_idx_train = np.concatenate(y_idx_train, axis=0)  # ← Concatenate integer labels
 
     Xs_validation = np.concatenate(Xs_validation, axis=0)
     ys_semantic_validation = np.concatenate(ys_semantic_validation, axis=0)
@@ -397,6 +406,7 @@ def _load_data_seeg_he2023xuanwu(load_params):
     ys_acoustic_tone1_validation = np.concatenate(ys_acoustic_tone1_validation, axis=0)
     ys_acoustic_tone2_validation = np.concatenate(ys_acoustic_tone2_validation, axis=0)
     subj_ids_validation = np.concatenate(subj_ids_validation, axis=0)
+    y_idx_validation = np.concatenate(y_idx_validation, axis=0)  # ← Concatenate integer labels
 
     Xs_test = np.concatenate(Xs_test, axis=0)
     ys_semantic_test = np.concatenate(ys_semantic_test, axis=0)
@@ -404,6 +414,7 @@ def _load_data_seeg_he2023xuanwu(load_params):
     ys_acoustic_tone1_test = np.concatenate(ys_acoustic_tone1_test, axis=0)
     ys_acoustic_tone2_test = np.concatenate(ys_acoustic_tone2_test, axis=0)
     subj_ids_test = np.concatenate(subj_ids_test, axis=0)
+    y_idx_test = np.concatenate(y_idx_test, axis=0)  # ← Concatenate integer labels
 
     # === Shuffle dataset (same as run_align_vis.py) ===
     train_idxs = np.arange(Xs_train.shape[0]); np.random.shuffle(train_idxs)
@@ -413,16 +424,19 @@ def _load_data_seeg_he2023xuanwu(load_params):
     Xs_train = Xs_train[train_idxs,...]; ys_semantic_train = ys_semantic_train[train_idxs,...]
     ys_visual_train = ys_visual_train[train_idxs,...]; ys_acoustic_tone1_train = ys_acoustic_tone1_train[train_idxs,...]
     ys_acoustic_tone2_train = ys_acoustic_tone2_train[train_idxs,...]; subj_ids_train = subj_ids_train[train_idxs,...]
+    y_idx_train = y_idx_train[train_idxs]  # ← Shuffle integer labels
 
     Xs_validation = Xs_validation[validation_idxs,...]; ys_semantic_validation = ys_semantic_validation[validation_idxs,...]
     ys_visual_validation = ys_visual_validation[validation_idxs,...]
     ys_acoustic_tone1_validation = ys_acoustic_tone1_validation[validation_idxs,...]
     ys_acoustic_tone2_validation = ys_acoustic_tone2_validation[validation_idxs,...]
     subj_ids_validation = subj_ids_validation[validation_idxs,...]
+    y_idx_validation = y_idx_validation[validation_idxs]  # ← Shuffle integer labels
 
     Xs_test = Xs_test[test_idxs,...]; ys_semantic_test = ys_semantic_test[test_idxs,...]
     ys_visual_test = ys_visual_test[test_idxs,...]; ys_acoustic_tone1_test = ys_acoustic_tone1_test[test_idxs,...]
     ys_acoustic_tone2_test = ys_acoustic_tone2_test[test_idxs,...]; subj_ids_test = subj_ids_test[test_idxs,...]
+    y_idx_test = y_idx_test[test_idxs]  # ← Shuffle integer labels
 
     # Log information
     msg = (
@@ -432,21 +446,21 @@ def _load_data_seeg_he2023xuanwu(load_params):
 
     # === Construct datasets (using custom MultitaskDataset class) ===
     dataset_train = MultitaskDataset(data_items=[utils.DotDict({
-        "X": X_i.T, "y_semantic": ys_i, "y_visual": yv_i, "y_tone1": yt1_i, "y_tone2": yt2_i, "subj_id": subj_id_i,
-    }) for X_i, ys_i, yv_i, yt1_i, yt2_i, subj_id_i in zip(
-        Xs_train, ys_semantic_train, ys_visual_train, ys_acoustic_tone1_train, ys_acoustic_tone2_train, subj_ids_train
+        "X": X_i.T, "y_semantic": ys_i, "y_visual": yv_i, "y_tone1": yt1_i, "y_tone2": yt2_i, "subj_id": subj_id_i, "y_idx": y_idx_i,
+    }) for X_i, ys_i, yv_i, yt1_i, yt2_i, subj_id_i, y_idx_i in zip(
+        Xs_train, ys_semantic_train, ys_visual_train, ys_acoustic_tone1_train, ys_acoustic_tone2_train, subj_ids_train, y_idx_train
     )], use_aug=True)
 
     dataset_validation = MultitaskDataset(data_items=[utils.DotDict({
-        "X": X_i.T, "y_semantic": ys_i, "y_visual": yv_i, "y_tone1": yt1_i, "y_tone2": yt2_i, "subj_id": subj_id_i,
-    }) for X_i, ys_i, yv_i, yt1_i, yt2_i, subj_id_i in zip(
-        Xs_validation, ys_semantic_validation, ys_visual_validation, ys_acoustic_tone1_validation, ys_acoustic_tone2_validation, subj_ids_validation
+        "X": X_i.T, "y_semantic": ys_i, "y_visual": yv_i, "y_tone1": yt1_i, "y_tone2": yt2_i, "subj_id": subj_id_i, "y_idx": y_idx_i,
+    }) for X_i, ys_i, yv_i, yt1_i, yt2_i, subj_id_i, y_idx_i in zip(
+        Xs_validation, ys_semantic_validation, ys_visual_validation, ys_acoustic_tone1_validation, ys_acoustic_tone2_validation, subj_ids_validation, y_idx_validation
     )], use_aug=False)
 
     dataset_test = MultitaskDataset(data_items=[utils.DotDict({
-        "X": X_i.T, "y_semantic": ys_i, "y_visual": yv_i, "y_tone1": yt1_i, "y_tone2": yt2_i, "subj_id": subj_id_i,
-    }) for X_i, ys_i, yv_i, yt1_i, yt2_i, subj_id_i in zip(
-        Xs_test, ys_semantic_test, ys_visual_test, ys_acoustic_tone1_test, ys_acoustic_tone2_test, subj_ids_test
+        "X": X_i.T, "y_semantic": ys_i, "y_visual": yv_i, "y_tone1": yt1_i, "y_tone2": yt2_i, "subj_id": subj_id_i, "y_idx": y_idx_i,
+    }) for X_i, ys_i, yv_i, yt1_i, yt2_i, subj_id_i, y_idx_i in zip(
+        Xs_test, ys_semantic_test, ys_visual_test, ys_acoustic_tone1_test, ys_acoustic_tone2_test, subj_ids_test, y_idx_test
     )], use_aug=False)
 
     # === Create dataloaders (same as run_align_vis.py) ===
@@ -528,6 +542,7 @@ class MultitaskDataset(torch.utils.data.Dataset):
             y_tone1_i: (5,) - The first tone label (one-hot).
             y_tone2_i: (5,) - The second tone label (one-hot).
             subj_id_i: (n_subjects,) - The subject ID.
+            y_idx_i: int - The integer class label (0-60).
         """
         # Get the data item at the specified index.
         data_item_i = cp.deepcopy(self.data_items[index])
@@ -535,6 +550,7 @@ class MultitaskDataset(torch.utils.data.Dataset):
         X_i = data_item_i.X; subj_id_i = data_item_i.subj_id
         y_semantic_i = data_item_i.y_semantic; y_visual_i = data_item_i.y_visual
         y_tone1_i = data_item_i.y_tone1; y_tone2_i = data_item_i.y_tone2
+        y_idx_i = data_item_i.y_idx  # ← Get integer label
 
         # Data augmentation (same as run_align_vis.py)
         if self.use_aug:
@@ -559,6 +575,7 @@ class MultitaskDataset(torch.utils.data.Dataset):
             torch.from_numpy(y_tone1_i.astype(np.float32)),
             torch.from_numpy(y_tone2_i.astype(np.float32)),
             torch.from_numpy(subj_id_i.astype(np.float32)),
+            torch.tensor(y_idx_i, dtype=torch.int64),  # ← Return integer label
         )
 
 """
@@ -597,7 +614,10 @@ def _evaluate(model, dataloader, params, device):
         loss_dict: DotDict - Dictionary of averaged losses.
         semantic_embeddings: np.ndarray - Predicted semantic embeddings.
         visual_embeddings: np.ndarray - Predicted visual embeddings.
+        semantic_labels: np.ndarray - GT semantic embeddings (768-d).
+        visual_labels: np.ndarray - GT visual embeddings (768-d).
         acoustic_results: dict - Acoustic classification results (accuracy, predictions).
+        y_idx_all: np.ndarray - Integer class labels (0-60).
     """
     model.eval()
     loss_dict = utils.DotDict()
@@ -611,10 +631,11 @@ def _evaluate(model, dataloader, params, device):
     all_tone1_labels = []
     all_tone2_preds = []
     all_tone2_labels = []
+    all_y_idx = []  # ← Collect integer labels
 
     with torch.no_grad():
         for batch_data in dataloader:
-            X, y_semantic, y_visual, y_tone1, y_tone2, subj_id = batch_data
+            X, y_semantic, y_visual, y_tone1, y_tone2, subj_id, y_idx = batch_data  # ← Unpack y_idx
             X = X.to(device=device, dtype=torch.float32)
             y_semantic = y_semantic.to(device=device, dtype=torch.float32)
             y_visual = y_visual.to(device=device, dtype=torch.float32)
@@ -653,6 +674,7 @@ def _evaluate(model, dataloader, params, device):
             all_visual_embs.append(outputs['visual'].detach().cpu().numpy())
             all_semantic_labels.append(y_semantic.detach().cpu().numpy())
             all_visual_labels.append(y_visual.detach().cpu().numpy())
+            all_y_idx.append(y_idx.detach().cpu().numpy())  # ← Collect integer labels
 
             # Collect acoustic predictions (average across token dimension)
             tone1_pred = outputs['acoustic'][0].detach().cpu().numpy()  # (batch, token_len, n_tones)
@@ -675,6 +697,7 @@ def _evaluate(model, dataloader, params, device):
     visual_embeddings = np.concatenate(all_visual_embs, axis=0)
     semantic_labels = np.concatenate(all_semantic_labels, axis=0)
     visual_labels = np.concatenate(all_visual_labels, axis=0)
+    y_idx_all = np.concatenate(all_y_idx, axis=0)  # ← Concatenate integer labels
 
     # Calculate acoustic accuracy
     tone1_preds = np.concatenate(all_tone1_preds, axis=0)
@@ -694,7 +717,7 @@ def _evaluate(model, dataloader, params, device):
         'tone2_labels': tone2_labels,
     }
 
-    return loss_dict, semantic_embeddings, visual_embeddings, semantic_labels, visual_labels, acoustic_results
+    return loss_dict, semantic_embeddings, visual_embeddings, semantic_labels, visual_labels, acoustic_results, y_idx_all  # ← Return integer labels
 
 # def train func
 def train():
@@ -852,7 +875,7 @@ def train():
         loss_train = utils.DotDict()
 
         for batch_idx, batch_data in enumerate(dataset_train):
-            X, y_semantic, y_visual, y_tone1, y_tone2, subj_id = batch_data
+            X, y_semantic, y_visual, y_tone1, y_tone2, subj_id, y_idx = batch_data  # ← Unpack y_idx (not used in training)
             X = X.to(device=params.model.device, dtype=torch.float32)
             y_semantic = y_semantic.to(device=params.model.device, dtype=torch.float32)
             y_visual = y_visual.to(device=params.model.device, dtype=torch.float32)
@@ -897,12 +920,12 @@ def train():
             loss_train[key_i] = item_i
 
         # === Validation Phase ===
-        loss_validation, val_semantic_embs, val_visual_embs, val_semantic_labels, val_visual_labels, val_acoustic_results = _evaluate(
+        loss_validation, val_semantic_embs, val_visual_embs, val_semantic_labels, val_visual_labels, val_acoustic_results, val_y_idx = _evaluate(
             model, dataset_validation, params, params.model.device
         )
 
         # === Test Phase ===
-        loss_test, test_semantic_embs, test_visual_embs, test_semantic_labels, test_visual_labels, test_acoustic_results = _evaluate(
+        loss_test, test_semantic_embs, test_visual_embs, test_semantic_labels, test_visual_labels, test_acoustic_results, test_y_idx = _evaluate(
             model, dataset_test, params, params.model.device
         )
 
@@ -940,6 +963,46 @@ def train():
         # Log learning rate
         writer.add_scalar("learning_rate", params.train.lr_i, global_step=epoch_idx)
 
+        # === Log task weights to TensorBoard ===
+        model_to_log = model.module if hasattr(model, 'module') else model
+        if params.model.use_uncertainty_weighting:
+            # Log learnable uncertainty parameters and derived weights
+            log_var_semantic = model_to_log.log_var_semantic.item()
+            log_var_visual = model_to_log.log_var_visual.item()
+            log_var_acoustic = model_to_log.log_var_acoustic.item()
+
+            # Calculate actual task weights (precision = exp(-log_var))
+            weight_semantic = np.exp(-log_var_semantic)
+            weight_visual = np.exp(-log_var_visual)
+            weight_acoustic = np.exp(-log_var_acoustic)
+
+            # Log log-variance (uncertainty)
+            writer.add_scalar("task_weights/log_var_semantic", log_var_semantic, global_step=epoch_idx)
+            writer.add_scalar("task_weights/log_var_visual", log_var_visual, global_step=epoch_idx)
+            writer.add_scalar("task_weights/log_var_acoustic", log_var_acoustic, global_step=epoch_idx)
+
+            # Log derived task weights (precision)
+            writer.add_scalar("task_weights/weight_semantic", weight_semantic, global_step=epoch_idx)
+            writer.add_scalar("task_weights/weight_visual", weight_visual, global_step=epoch_idx)
+            writer.add_scalar("task_weights/weight_acoustic", weight_acoustic, global_step=epoch_idx)
+
+            # Log normalized weights (for easier interpretation)
+            total_weight = weight_semantic + weight_visual + weight_acoustic
+            writer.add_scalar("task_weights/normalized_semantic", weight_semantic / total_weight, global_step=epoch_idx)
+            writer.add_scalar("task_weights/normalized_visual", weight_visual / total_weight, global_step=epoch_idx)
+            writer.add_scalar("task_weights/normalized_acoustic", weight_acoustic / total_weight, global_step=epoch_idx)
+        else:
+            # Log fixed task weights from params
+            writer.add_scalar("task_weights/weight_semantic", params.model.task_weight_semantic, global_step=epoch_idx)
+            writer.add_scalar("task_weights/weight_visual", params.model.task_weight_visual, global_step=epoch_idx)
+            writer.add_scalar("task_weights/weight_acoustic", params.model.task_weight_acoustic, global_step=epoch_idx)
+
+            # Log normalized weights
+            total_weight = params.model.task_weight_semantic + params.model.task_weight_visual + params.model.task_weight_acoustic
+            writer.add_scalar("task_weights/normalized_semantic", params.model.task_weight_semantic / total_weight, global_step=epoch_idx)
+            writer.add_scalar("task_weights/normalized_visual", params.model.task_weight_visual / total_weight, global_step=epoch_idx)
+            writer.add_scalar("task_weights/normalized_acoustic", params.model.task_weight_acoustic / total_weight, global_step=epoch_idx)
+
         # === Track and save best model ===
         current_val_total_loss = loss_validation.get("total", float('inf'))
         if current_val_total_loss < best_val_total_loss:
@@ -962,16 +1025,16 @@ def train():
             msg = f"New best model saved (epoch {epoch_idx}) with val_loss={best_val_total_loss:.6f}"
             print(msg); paths.run.logger.summaries.info(msg)
 
-            # Save best results to summaries directory
-            np.savez(
-                os.path.join(paths.run.summaries, "best_semantic_embeddings.npz"),
-                embeddings=test_semantic_embs,
-                labels=test_semantic_labels
+            # Save best results to summaries directory (with integer labels as final column)
+            best_semantic_with_labels = np.concatenate([test_semantic_embs, test_y_idx[:, None]], axis=1)
+            np.save(
+                os.path.join(paths.run.summaries, "best_semantic_embeddings.npy"),
+                best_semantic_with_labels
             )
-            np.savez(
-                os.path.join(paths.run.summaries, "best_visual_embeddings.npz"),
-                embeddings=test_visual_embs,
-                labels=test_visual_labels
+            best_visual_with_labels = np.concatenate([test_visual_embs, test_y_idx[:, None]], axis=1)
+            np.save(
+                os.path.join(paths.run.summaries, "best_visual_embeddings.npy"),
+                best_visual_with_labels
             )
             np.savez(
                 os.path.join(paths.run.summaries, "best_acoustic_results.npz"),
@@ -994,16 +1057,18 @@ def train():
             msg = f"INFO: Saved checkpoint to {ckpt_path}"
             print(msg); paths.run.logger.summaries.info(msg)
 
-            # Save semantic embeddings
-            semantic_emb_path = os.path.join(paths.run.save_embeddings, f"semantic_embeddings_epoch_{epoch_idx + 1:03d}.npz")
-            np.savez(semantic_emb_path, embeddings=test_semantic_embs, labels=test_semantic_labels)
-            msg = f"INFO: Saved semantic embeddings to {semantic_emb_path}"
+            # Save semantic embeddings with integer labels as final column (compatible with evaluation script)
+            semantic_emb_with_labels = np.concatenate([test_semantic_embs, test_y_idx[:, None]], axis=1)  # (n_samples, 769)
+            semantic_emb_path = os.path.join(paths.run.save_embeddings, f"semantic_embeddings_epoch_{epoch_idx + 1:03d}.npy")
+            np.save(semantic_emb_path, semantic_emb_with_labels)
+            msg = f"INFO: Saved semantic embeddings to {semantic_emb_path} (shape: {semantic_emb_with_labels.shape})"
             print(msg); paths.run.logger.summaries.info(msg)
 
-            # Save visual embeddings
-            visual_emb_path = os.path.join(paths.run.save_embeddings, f"visual_embeddings_epoch_{epoch_idx + 1:03d}.npz")
-            np.savez(visual_emb_path, embeddings=test_visual_embs, labels=test_visual_labels)
-            msg = f"INFO: Saved visual embeddings to {visual_emb_path}"
+            # Save visual embeddings with integer labels as final column (compatible with evaluation script)
+            visual_emb_with_labels = np.concatenate([test_visual_embs, test_y_idx[:, None]], axis=1)  # (n_samples, 769)
+            visual_emb_path = os.path.join(paths.run.save_embeddings, f"visual_embeddings_epoch_{epoch_idx + 1:03d}.npy")
+            np.save(visual_emb_path, visual_emb_with_labels)
+            msg = f"INFO: Saved visual embeddings to {visual_emb_path} (shape: {visual_emb_with_labels.shape})"
             print(msg); paths.run.logger.summaries.info(msg)
 
             # Save acoustic results
