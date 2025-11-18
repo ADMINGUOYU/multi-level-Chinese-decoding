@@ -15,15 +15,15 @@ SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SO
 # Basic configuration
 SEEDS="42"                    # Random seeds (space-separated for multiple runs)
 # Subject list - will loop through all subjects sequentially
-# ALL_SUBJS=("001" "002" "003" "004" "005" "006" "007" "008" "009" "010" "011" "012")
-ALL_SUBJS=("004")
+ALL_SUBJS=("001" "002" "003" "004" "005" "006" "007" "008" "009" "010" "011" "012")
+# ALL_SUBJS=("004")
 
 # Learning rate schedule
 LR_MIN=1e-5                   # Minimum learning rate (cosine annealing end)
-LR_MAX=5e-4                   # Maximum learning rate (after warmup)
+LR_MAX=2e-4                   # Maximum learning rate (after warmup)
 
 # Training schedule
-N_EPOCHS=300                  # Total number of training epochs
+N_EPOCHS=350                  # Total number of training epochs
 WARMUP_EPOCHS=20              # Number of warmup epochs (linear warmup)
 BATCH_SIZE=32                 # Batch size for training
 
@@ -37,8 +37,8 @@ TASK_WEIGHT_VISUAL=1.0        # Weight for visual task
 TASK_WEIGHT_ACOUSTIC=1.0      # Weight for acoustic task
 
 # Multi-task learning strategy flags
-USE_UNCERTAINTY_WEIGHTING="--use_uncertainty_weighting"  # Set to "--use_uncertainty_weighting" to enable auto-balancing, default as ""
-# USE_UNCERTAINTY_WEIGHTING=""  # Set to "--use_uncertainty_weighting" to enable auto-balancing, default as ""
+# USE_UNCERTAINTY_WEIGHTING="--use_uncertainty_weighting"  # Set to "--use_uncertainty_weighting" to enable auto-balancing, default as ""
+USE_UNCERTAINTY_WEIGHTING=""  # Set to "--use_uncertainty_weighting" to enable auto-balancing, default as ""
 ACOUSTIC_USE_CONTRA=""        # Set to "--acoustic_use_contra" to add contrastive loss to acoustic task, default as ""
 
 ################################################################################

@@ -346,8 +346,8 @@ def _load_data_seeg_he2023xuanwu(load_params):
         y_visual_validation = y_visual_test[validation_mask,:]; y_visual_test = y_visual_test[~validation_mask,:]
         y_tone1_validation = y_tone1_test_oh[validation_mask,:]; y_tone1_test = y_tone1_test_oh[~validation_mask,:]
         y_tone2_validation = y_tone2_test_oh[validation_mask,:]; y_tone2_test = y_tone2_test_oh[~validation_mask,:]
-        # Split integer labels too
-        y_idx_validation = y_test_idx[validation_mask]; y_idx_test = y_test_idx[~validation_mask]
+        # Split integer labels too (use different variable names to avoid collision)
+        y_idx_validation_i = y_test_idx[validation_mask]; y_idx_test_i = y_test_idx[~validation_mask]
 
         # Create subject IDs (same as run_align_vis.py)
         subj_id_train = np.array([np.eye(n_subjects)[subj_idx] for _ in range(X_train.shape[0])])
@@ -370,12 +370,12 @@ def _load_data_seeg_he2023xuanwu(load_params):
         ys_visual_validation.append(y_visual_validation)
         ys_acoustic_tone1_validation.append(y_tone1_validation); ys_acoustic_tone2_validation.append(y_tone2_validation)
         subj_ids_validation.append(subj_id_validation)
-        y_idx_validation.append(y_idx_validation)  # ← Store integer labels
+        y_idx_validation.append(y_idx_validation_i)  # ← Store integer labels (use _i suffix)
 
         Xs_test.append(X_test); ys_semantic_test.append(y_semantic_test); ys_visual_test.append(y_visual_test)
         ys_acoustic_tone1_test.append(y_tone1_test); ys_acoustic_tone2_test.append(y_tone2_test)
         subj_ids_test.append(subj_id_test)
-        y_idx_test.append(y_idx_test)  # ← Store integer labels
+        y_idx_test.append(y_idx_test_i)  # ← Store integer labels (use _i suffix)
 
         # Update params
         n_channels = max(X.shape[-1], n_channels) if n_channels is not None else X.shape[-1]
