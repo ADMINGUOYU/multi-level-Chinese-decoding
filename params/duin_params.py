@@ -1699,6 +1699,8 @@ class duin_fusion_cls_params(duin_params):
         Update train parameters.
         """
         ## -- Normal parameters
+        # The ratio of train dataset. The rest is test dataset.
+        self.train.train_ratio = 0.8
         # Normal parameters related to seeg_he2023xuanwu dataset.
         if self.train.dataset == "seeg_he2023xuanwu":
             # Number of epochs used in training process

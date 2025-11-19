@@ -23,7 +23,7 @@ LR_MIN=1e-5                   # Minimum learning rate (cosine annealing end)
 LR_MAX=1e-4                   # Maximum learning rate (after warmup)
 
 # Training schedule
-N_EPOCHS=200                  # Total number of training epochs
+N_EPOCHS=250                  # Total number of training epochs
 WARMUP_EPOCHS=20              # Number of warmup epochs (linear warmup)
 BATCH_SIZE=32                 # Batch size for training
 
@@ -33,7 +33,8 @@ BATCH_SIZE=32                 # Batch size for training
 
 # Freeze encoder (SubjectBlock + Tokenizer + Encoder)
 # Set to "--no_freeze_encoder" to enable end-to-end fine-tuning
-FREEZE_ENCODER="--no_freeze_encoder"  # Default: freeze encoder
+FREEZE_ENCODER="--no_freeze_encoder"  # Default: freeze encoder for fine-tuning
+# FREEZE_ENCODER="--freeze_encoder"  # Default: freeze encoder for fine-tuning
 
 # Freeze task heads (semantic_head + visual_head + acoustic_heads)
 # Set to "--freeze_task_heads" to freeze task heads
@@ -65,6 +66,9 @@ CLS_LOSS_SCALE=1.0            # Scale factor for classification loss
 # Change to training directory
 cd train/duin
 
+# Workaround for protobuf version incompatibility
+export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
+
 # Loop through all subjects sequentially
 for SUBJ in "${ALL_SUBJS[@]}"; do
     echo "========================================="
@@ -76,7 +80,7 @@ for SUBJ in "${ALL_SUBJS[@]}"; do
     # PT_MULTITASK_CKPT="./pretrains/duin/${SUBJ}/multitask/model/checkpoint-299.pth"
     
     ##************此处现在DEBUG状态，后续需要修改，存储最好的stage1 ckpt************##
-    PT_MULTITASK_CKPT="/mnt/afs/250010218/multi-level-Chinese-decoding/summaries/2025-11-17/1/train/ckpt/checkpoint-299.pth"
+    PT_MULTITASK_CKPT="/mnt/afs/250010218/multi-level-Chinese-decoding/summaries/2025-11-17/1/train/ckpt/checkpoint-149.pth"
     #**************************************************************************##
    
     # Check if checkpoint exists

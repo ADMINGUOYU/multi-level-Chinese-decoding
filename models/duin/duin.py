@@ -1959,19 +1959,15 @@ class duin_fusion_cls(nn.Module):
             None
         """
         # Load pretrained multi-task model
-        # Import the multitask params to get the architecture
-        from params.duin_params import duin_multitask_params
-        multitask_params = duin_multitask_params(dataset=self.params.dataset)
+        # Use params from self.params which contains architecture from pretrained checkpoint
+        # (copied in run_fusion_cls.py from the actual checkpoint weights)
+        # DO NOT create new duin_multitask_params here as it will reset to default values!
 
-        # Update multitask params with any custom settings from fusion params
-        # (e.g., encoder dropout, head architecture)
-        if hasattr(self.params, 'multitask_encoder'):
-            for key, value in self.params.multitask_encoder.items():
-                if hasattr(multitask_params.model.encoder, key):
-                    setattr(multitask_params.model.encoder, key, value)
-
-        # Initialize the multi-task model
-        self.multitask_model = duin_multitask(params=multitask_params.model)
+        # Initialize the multi-task model using the params from pretrained checkpoint
+        # self.params already contains all the necessary multitask model parameters
+        # (n_subjects, n_channels, seq_len, encoder, tokenizer, etc.) copied from the
+        # pretrained checkpoint in run_fusion_cls.py
+        self.multitask_model = duin_multitask(params=self.params)
 
         # Freeze encoder if specified
         if self.params.freeze_encoder:
@@ -1996,8 +1992,8 @@ class duin_fusion_cls(nn.Module):
         # Calculate fusion dimension dynamically from loaded multitask model
         # d_fusion = 768 (semantic) + 768 (visual) + d_acoustic
         # d_acoustic depends on the acoustic head's d_hidden[-1] or d_model
-        acoustic_d_hidden = multitask_params.model.acoustic_cls.d_hidden
-        d_acoustic = acoustic_d_hidden[-1] if len(acoustic_d_hidden) > 0 else multitask_params.model.encoder.d_model
+        acoustic_d_hidden = self.params.acoustic_cls.d_hidden
+        d_acoustic = acoustic_d_hidden[-1] if len(acoustic_d_hidden) > 0 else self.params.encoder.d_model
         self.d_fusion = 768 + 768 + d_acoustic
 
         print(f"INFO: Fusion dimension calculated as {self.d_fusion} (768 + 768 + {d_acoustic})")
@@ -2021,15 +2017,14 @@ class duin_fusion_cls(nn.Module):
         if self.params.fusion.dropout > 0.:
             self.fusion_head.append(nn.Dropout(p=self.params.fusion.dropout, inplace=False))
 
-        # Add final classification layer
-        self.fusion_head.append(nn.Sequential(
+        # Add final classification layer (raw logits for cross-entropy loss)
+        self.fusion_head.append(
             nn.Linear(
                 in_features=(self.params.fusion.d_hidden[-1] if len(self.params.fusion.d_hidden) > 0 else self.d_fusion),
                 out_features=self.params.fusion.n_labels,
                 bias=True, device=None, dtype=None
-            ),
-            nn.Sigmoid()
-        ))
+            )
+        )
 
     # def _init_weight func
     def _init_weight(self):
@@ -2124,7 +2119,7 @@ class duin_fusion_cls(nn.Module):
         loss_total = self.params.cls_loss_scale * loss_cls
 
         # Prepare loss dict
-        loss = utils.DotDict({
+        loss = DotDict({
             "total": loss_total,
             "cls": loss_cls,
         })
