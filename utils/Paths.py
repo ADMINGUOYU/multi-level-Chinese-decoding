@@ -93,12 +93,13 @@ class Paths:
     # def _init_run_name func
     def _init_run_name(self):
         """
-        Initialize the name of current model training run, which is saved in `run`.
+        Initialize the name of current model training run.
         """
         # Initialize name of current `Paths` object.
         self.name = "_".join(self.params.__class__.__name__.split("_")[:-1])
-        with open(os.path.join(self.run.base, "name"), "w") as f:
-            f.write(self.name)
+        # NOTE: 'name' file creation removed as it's no longer needed
+        # with open(os.path.join(self.run.base, "name"), "w") as f:
+        #     f.write(self.name)
 
     # def _init_run_logger func
     def _init_run_logger(self, path, name):

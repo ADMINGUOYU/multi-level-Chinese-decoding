@@ -79,8 +79,8 @@ def init(params_):
     os.makedirs(paths.run.summaries, exist_ok=True)
     print(f"[INFO] Summaries directory created at: {paths.run.summaries}")
 
-    # --- Save training metadata ---
-    training_info_path = os.path.join(paths.run.train, "training_info.txt")
+    # --- Save training metadata (in same directory as summaries.log) ---
+    training_info_path = os.path.join(paths.run.base, "training_info.txt")
     subj_i = params.train.subjs[0]
     with open(training_info_path, "w") as f:
         f.write(f"Training Type: multitask (semantic + visual + acoustic)\n")

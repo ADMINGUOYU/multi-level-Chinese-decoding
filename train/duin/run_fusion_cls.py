@@ -40,6 +40,8 @@ params = None; paths = None
 model = None; optimizer = None
 # Data variables (loaded before init)
 dataset_train = None; dataset_validation = None; dataset_test = None
+# Best accuracy tracking (based on test accuracy)
+best_test_acc = 0.0; best_valid_acc = 0.0; best_epoch = -1
 
 """
 init funcs
@@ -74,8 +76,8 @@ def init(params_):
     os.makedirs(paths.run.ckpt, exist_ok=True)
     print(f"[INFO] Checkpoint directory created at: {paths.run.ckpt}")
 
-    # --- Save training metadata file ---
-    training_info_path = os.path.join(paths.run.train, "training_info.txt")
+    # --- Save training metadata file (in same directory as summaries.log) ---
+    training_info_path = os.path.join(paths.run.base, "training_info.txt")
     subj_i = params.train.subjs[0]
     with open(training_info_path, "w") as f:
         f.write(f"Training Type: fusion_cls (61-word classification from fused embeddings)\n")
@@ -331,7 +333,7 @@ def _test_epoch():
 # def _log_epoch func
 def _log_epoch():
     """
-    Log information of one epoch, including saving checkpoints.
+    Log information of one epoch, including saving best checkpoint.
 
     Args:
         None
@@ -339,23 +341,40 @@ def _log_epoch():
     Returns:
         None
     """
-    # Log epoch-level results (train/valid/test)
+    global best_test_acc, best_valid_acc, best_epoch
+
+    # Check if current test accuracy is the best
+    is_best = params.train.test_acc > best_test_acc
+
+    if is_best:
+        best_test_acc = params.train.test_acc
+        best_valid_acc = params.train.valid_acc
+        best_epoch = params.train.epoch
+
+        # Save best checkpoint
+        ckpt_path = os.path.join(paths.run.ckpt, "checkpoint-best.pth")
+        # Handle DataParallel model
+        model_to_save = model.module if hasattr(model, 'module') else model
+        torch.save(model_to_save.state_dict(), ckpt_path)
+
+        # Save best epoch info
+        best_info_path = os.path.join(paths.run.ckpt, "best_checkpoint_info.txt")
+        with open(best_info_path, "w") as f:
+            f.write(f"Best Epoch: {best_epoch + 1}\n")
+            f.write(f"Best Test Acc: {best_test_acc:.2f}%\n")
+            f.write(f"Best Valid Acc: {best_valid_acc:.2f}%\n")
+
+    # Log epoch-level results with best accuracy info
     msg = (
         f"Epoch [{params.train.epoch + 1}/{params.train.n_epochs}] ({params.train.train_time:.1f}s) | "
         f"Train Loss: {params.train.train_loss:.4f}, Acc: {params.train.train_acc:.2f}% | "
         f"Valid Loss: {params.train.valid_loss:.4f}, Acc: {params.train.valid_acc:.2f}% | "
-        f"Test Loss: {params.train.test_loss:.4f}, Acc: {params.train.test_acc:.2f}%"
+        f"Test Loss: {params.train.test_loss:.4f}, Acc: {params.train.test_acc:.2f}% | "
+        f"Best Test: {best_test_acc:.2f}% (Epoch {best_epoch + 1})"
     )
+    if is_best:
+        msg += " ★ NEW BEST"
     print(msg); paths.run.logger.summaries.info(msg)
-
-    # Save checkpoint every 50 epochs and at the last epoch
-    if (params.train.epoch + 1) % 50 == 0 or (params.train.epoch + 1) == params.train.n_epochs:
-        ckpt_path = os.path.join(paths.run.ckpt, f"checkpoint-{params.train.epoch}.pth")
-        # Handle DataParallel model
-        model_to_save = model.module if hasattr(model, 'module') else model
-        torch.save(model_to_save.state_dict(), ckpt_path)
-        msg = f"INFO: Saved checkpoint to {ckpt_path}"
-        print(msg); paths.run.logger.summaries.info(msg)
 
 """
 arg funcs

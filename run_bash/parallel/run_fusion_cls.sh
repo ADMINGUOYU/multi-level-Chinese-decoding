@@ -25,7 +25,7 @@ LR_MAX=1e-4                   # Maximum learning rate (after warmup)
 # Training schedule
 N_EPOCHS=250                  # Total number of training epochs
 WARMUP_EPOCHS=20              # Number of warmup epochs (linear warmup)
-BATCH_SIZE=32                 # Batch size for training
+BATCH_SIZE=64                 # Batch size for training
 
 ################################################################################
 # Freezing Strategy
@@ -47,10 +47,10 @@ FREEZE_TASK_HEADS=""          # Default: do NOT freeze task heads (allow fine-tu
 # Fusion head hidden dimensions (comma-separated)
 # Input dimension: 768 + 768 + d_acoustic (automatically calculated)
 # Default: 1664 → 512 → 256 → 61
-FUSION_D_HIDDEN="512,256"     # Hidden layer dimensions
+FUSION_D_HIDDEN="1024,512,256"     # Hidden layer dimensions
 
 # Dropout rate for fusion head
-FUSION_DROPOUT=0.3            # Dropout probability
+FUSION_DROPOUT=0.4            # Dropout probability
 
 ################################################################################
 # Loss Configuration
@@ -79,8 +79,8 @@ for SUBJ in "${ALL_SUBJS[@]}"; do
     # IMPORTANT: This should point to the trained multitask model from Stage 1
     # PT_MULTITASK_CKPT="./pretrains/duin/${SUBJ}/multitask/model/checkpoint-299.pth"
     
-    ##************此处现在DEBUG状态，后续需要修改，存储最好的stage1 ckpt************##
-    PT_MULTITASK_CKPT="/mnt/afs/250010218/multi-level-Chinese-decoding/summaries/2025-11-17/1/train/ckpt/checkpoint-149.pth"
+    ##************此处现在DEBUG状态，用于测试，后续需要修改，存储最好的stage1 ckpt************##
+    PT_MULTITASK_CKPT="/mnt/afs/250010218/multi-level-Chinese-decoding/summaries/2025-11-17/1/train/ckpt/checkpoint-299.pth"
     #**************************************************************************##
    
     # Check if checkpoint exists
