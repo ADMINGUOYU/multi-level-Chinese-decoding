@@ -25,7 +25,7 @@ LR_MAX=1e-4                   # Maximum learning rate (after warmup)
 # Training schedule
 N_EPOCHS=250                  # Total number of training epochs
 WARMUP_EPOCHS=20              # Number of warmup epochs (linear warmup)
-BATCH_SIZE=64                 # Batch size for training
+BATCH_SIZE=32                 # Batch size for training
 
 ################################################################################
 # Freezing Strategy
@@ -80,6 +80,9 @@ for SUBJ in "${ALL_SUBJS[@]}"; do
     # PT_MULTITASK_CKPT="./pretrains/duin/${SUBJ}/multitask/model/checkpoint-299.pth"
     
     ##************此处现在DEBUG状态，用于测试，后续需要修改，存储最好的stage1 ckpt************##
+    #certain weight，100epoch loss最低，后面loss就飘了
+    # PT_MULTITASK_CKPT="/mnt/afs/250010218/multi-level-Chinese-decoding/summaries/2025-11-18/0/train/ckpt/checkpoint-099.pth"
+    #unsertain weight
     PT_MULTITASK_CKPT="/mnt/afs/250010218/multi-level-Chinese-decoding/summaries/2025-11-17/1/train/ckpt/checkpoint-299.pth"
     #**************************************************************************##
    

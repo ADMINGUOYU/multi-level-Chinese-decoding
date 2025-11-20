@@ -376,6 +376,23 @@ def _log_epoch():
         msg += " ★ NEW BEST"
     print(msg); paths.run.logger.summaries.info(msg)
 
+    # === Log to TensorBoard ===
+    writer = paths.run.logger.tensorboard
+    epoch_idx = params.train.epoch
+
+    # Log losses for train/validation/test
+    writer.add_scalar("losses/train/total", params.train.train_loss, global_step=epoch_idx)
+    writer.add_scalar("losses/validation/total", params.train.valid_loss, global_step=epoch_idx)
+    writer.add_scalar("losses/test/total", params.train.test_loss, global_step=epoch_idx)
+
+    # Log accuracy for train/validation/test
+    writer.add_scalar("accuracy/train", params.train.train_acc, global_step=epoch_idx)
+    writer.add_scalar("accuracy/validation", params.train.valid_acc, global_step=epoch_idx)
+    writer.add_scalar("accuracy/test", params.train.test_acc, global_step=epoch_idx)
+
+    # Log learning rate
+    writer.add_scalar("learning_rate", params.train.lr_i, global_step=epoch_idx)
+
 """
 arg funcs
 """
